@@ -95,3 +95,28 @@ variable "backup_retention_monthly_days" {
   type        = number
   default     = 180
 }
+
+# --- Game VM ---
+
+variable "game_vm_ocpus" {
+  description = "OCPUs for the Ampere A1 game VM. Default is the full Always Free A1 allowance."
+  type        = number
+  default     = 4
+}
+
+variable "game_vm_memory_gb" {
+  description = "Memory (GB) for the Ampere A1 game VM. Default is the full Always Free A1 allowance."
+  type        = number
+  default     = 24
+}
+
+variable "game_volume_size_gb" {
+  description = "Size of the Block Volume holding the Palworld world save, separate from the boot volume."
+  type        = number
+  default     = 100
+}
+
+variable "palworld_bot_ssh_public_key" {
+  description = "Public half of the dedicated keypair generated for the bot's restricted SSH access (see infrastructure/cloud-init/README.md). Injected into game-vm.yaml's authorized_keys forced-command line via templatefile()."
+  type        = string
+}
