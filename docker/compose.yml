@@ -6,6 +6,10 @@
 ##
 ## Image: thijsvanloef/palworld-server-docker — actively maintained, RCON support,
 ## env-driven config (see CLAUDE.md's architecture decisions).
+##
+## Port variables have :-8211/:-25575 fallbacks matching .env.example's own defaults
+## — purely so `docker compose config` can validate structurally without a real .env
+## present (e.g. in CI). A real deployment's .env always overrides these.
 services:
   palworld:
     image: thijsvanloef/palworld-server-docker:latest
@@ -20,7 +24,7 @@ services:
       SERVER_DESCRIPTION: ${PALWORLD_SERVER_DESCRIPTION}
       ADMIN_PASSWORD: ${PALWORLD_ADMIN_PASSWORD}
       SERVER_PASSWORD: ${PALWORLD_SERVER_PASSWORD}
-      PORT: ${PALWORLD_PUBLIC_PORT}
+      PORT: ${PALWORLD_PUBLIC_PORT:-8211}
       PLAYERS: ${PALWORLD_MAX_PLAYERS}
 
       # Private friend-group server, not listed publicly — keeps the query port
@@ -32,7 +36,7 @@ services:
       # RCON is how the bot controls the server (start/stop broadcast, countdown,
       # player queries) — required, not optional, for this project.
       RCON_ENABLED: "true"
-      RCON_PORT: ${RCON_PORT}
+      RCON_PORT: ${RCON_PORT:-25575}
 
       # This image ships its own local backup/cron feature — explicitly disabled.
       # Phase 3's backup.sh owns backups (RCON save + upload to Object Storage with
@@ -42,7 +46,7 @@ services:
 
       UPDATE_ON_BOOT: "true"
     ports:
-      - "${PALWORLD_PUBLIC_PORT}:${PALWORLD_PUBLIC_PORT}/udp"
+      - "${PALWORLD_PUBLIC_PORT:-8211}:${PALWORLD_PUBLIC_PORT:-8211}/udp"
       # RCON must be published to the host — the bot connects from an entirely
       # separate VM, and Docker's default bridge network isn't reachable from
       # outside the host at all unless a port is published. Safety here comes from
@@ -50,6 +54,6 @@ services:
       # compute-bot.tf's cross-NSG rule means only the bot VM's NSG can even reach
       # this host's RCON port on the network in the first place (same
       # defense-in-depth pattern as the admin-only-restricted SSH port).
-      - "${RCON_PORT}:${RCON_PORT}/tcp"
+      - "${RCON_PORT:-25575}:${RCON_PORT:-25575}/tcp"
     volumes:
       - /mnt/palworld-data:/palworld
