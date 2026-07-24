@@ -2,6 +2,17 @@ data "oci_objectstorage_namespace" "ns" {
   compartment_id = var.compartment_ocid
 }
 
+# Required for object_lifecycle_policy to actually function — OCI's lifecycle engine
+# runs as the "objectstorage" service principal, which needs its own explicit IAM grant
+# to expire/delete objects on your behalf, separate from your own user's permissions.
+# Without this, lifecycle policy creation/operation fails with InsufficientServicePermissions.
+resource "oci_identity_policy" "objectstorage_lifecycle" {
+  compartment_id = var.compartment_ocid
+  name           = "palworld-objectstorage-lifecycle"
+  description    = "Allows the Object Storage service to execute this project's backup-retention lifecycle rules."
+  statements     = ["Allow service objectstorage to manage object-family in tenancy"]
+}
+
 resource "oci_objectstorage_bucket" "backups" {
   compartment_id = var.compartment_ocid
   namespace      = data.oci_objectstorage_namespace.ns.namespace

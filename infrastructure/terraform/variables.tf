@@ -96,6 +96,21 @@ variable "backup_retention_monthly_days" {
   default     = 180
 }
 
+# --- Compute (shared) ---
+
+variable "availability_domain_index" {
+  description = <<-EOT
+    Index into data.oci_identity_availability_domains.ads.availability_domains for both
+    VMs. Always Free shapes (both E2.1.Micro and A1.Flex) are only available in ONE
+    specific availability domain per tenancy in multi-AD regions — NOT necessarily
+    index 0. Find yours via the OCI console: Governance -> Limits, Quotas and Usage ->
+    Compute -> cycle the Availability Domain dropdown until VM.Standard.A1.Flex /
+    VM.Standard.E2.1.Micro show a non-zero limit.
+  EOT
+  type        = number
+  default     = 0
+}
+
 # --- Game VM ---
 
 variable "game_vm_ocpus" {

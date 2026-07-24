@@ -34,7 +34,7 @@ resource "oci_core_network_security_group_security_rule" "rcon_from_bot" {
 
 resource "oci_core_instance" "bot" {
   compartment_id      = var.compartment_ocid
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   display_name        = "palworld-bot-vm"
   shape               = "VM.Standard.E2.1.Micro"
 
