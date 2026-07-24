@@ -70,7 +70,7 @@ async function upsertStatusMessage(
 // redundant edits on its own (uptime text is stable for a whole minute at a time).
 let lastRenderedContent: string | undefined;
 
-export async function runHeartbeatCheck(client: Client<true>): Promise<void> {
+async function runHeartbeatCheckOnce(client: Client<true>): Promise<void> {
   const state = await getState();
   const snapshot = await getSnapshot();
   const content = renderEmbedContent(snapshot, state.serverStartedAt);
@@ -92,6 +92,24 @@ export async function runHeartbeatCheck(client: Client<true>): Promise<void> {
   const messageId = await upsertStatusMessage(client, content, state.statusMessageId);
   lastRenderedContent = content;
   await updateState({ lastKnownUp: snapshot.running, statusMessageId: messageId });
+}
+
+// Serializes runHeartbeatCheck() calls -- without this, setInterval could fire an
+// overlapping tick if one check runs longer than the interval (plausible here: this
+// project's whole premise is the game VM/container is routinely down, which is
+// exactly when a bare TCP connect to RCON/SSH hangs longest -- neither rcon-client
+// nor node-ssh sets a connect timeout, so a slow/absent server can easily exceed a
+// 60s interval). Two overlapping calls would both read the same stale
+// lastKnownUp/statusMessageId before either writes back, producing duplicate
+// transition announcements and/or duplicate status messages -- the same failure
+// class presenceWatcher.ts's renderQueue already fixed for a different module; this
+// carries that same pattern over here instead of re-deriving a new one.
+let heartbeatQueue: Promise<unknown> = Promise.resolve();
+
+export function runHeartbeatCheck(client: Client<true>): Promise<void> {
+  const task = heartbeatQueue.then(() => runHeartbeatCheckOnce(client));
+  heartbeatQueue = task.catch(() => undefined);
+  return task;
 }
 
 export function startStatusHeartbeat(client: Client<true>, intervalMs: number): NodeJS.Timeout {

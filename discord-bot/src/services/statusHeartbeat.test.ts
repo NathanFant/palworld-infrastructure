@@ -135,4 +135,26 @@ describe("runHeartbeatCheck", () => {
 
     expect(editMock).toHaveBeenCalledTimes(2);
   });
+
+  it("serializes concurrent checks so a transition is announced and the message upserted only once", async () => {
+    // Stateful mocks (not static return values) -- this is what actually exercises
+    // the race: without serialization, two overlapping calls would both read the
+    // same starting state (statusMessageId: null, lastKnownUp: false) before either
+    // write lands, both announcing the transition and both sending a new message.
+    let persisted = { lastKnownUp: false, statusMessageId: null as string | null, serverStartedAt: null as string | null };
+    getStateMock.mockImplementation(() => Promise.resolve({ ...persisted }));
+    updateStateMock.mockImplementation((partial: Partial<typeof persisted>) => {
+      persisted = { ...persisted, ...partial };
+      return Promise.resolve(persisted);
+    });
+    serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: true, state: "running" } });
+    statusChannel.messages.fetch.mockImplementation((id: string) =>
+      id === "new-message-id" ? Promise.resolve({ edit: vi.fn().mockResolvedValue(undefined) }) : Promise.reject(new Error("Unknown Message")),
+    );
+
+    await Promise.all([runHeartbeatCheck(client), runHeartbeatCheck(client)]);
+
+    expect(statusChannel.send).toHaveBeenCalledTimes(2); // one status message + one transition announcement
+    expect(statusChannel.send.mock.calls.filter((call) => /just came online/.test(String(call[0]))).length).toBe(1);
+  });
 });
