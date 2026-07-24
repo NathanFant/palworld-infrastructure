@@ -15,6 +15,10 @@ packages:
   - gnupg
   - fail2ban
   - unattended-upgrades
+  # build-essential + git: building mcrcon from source (backup.sh's RCON client --
+  # single C file, no other deps, more robust than pinning a release binary URL/arch).
+  - build-essential
+  - git
 
 users:
   - default
@@ -91,3 +95,20 @@ runcmd:
   # --- Palworld deploy target directory (compose file itself deployed separately) ---
   - mkdir -p /opt/palworld
   - chown palworld-bot:docker /opt/palworld /mnt/palworld-data
+
+  # --- mcrcon: RCON client backup.sh uses to trigger a Save before snapshotting ---
+  # (docker/compose.yml already publishes RCON to the host, so this connects to
+  # localhost:<rcon_port> -- no container access needed.)
+  - >
+    test -x /usr/local/bin/mcrcon ||
+    (git clone --depth 1 https://github.com/Tiiffi/mcrcon.git /tmp/mcrcon &&
+    make -C /tmp/mcrcon &&
+    install -m 0755 /tmp/mcrcon/mcrcon /usr/local/bin/mcrcon &&
+    rm -rf /tmp/mcrcon)
+
+  # --- OCI CLI: backup.sh uploads to Object Storage via instance-principal auth --
+  # (infrastructure/terraform/backup-iam.tf), no static credential file involved.
+  - >
+    test -x /usr/local/bin/oci ||
+    bash -c "$(curl -Ls https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)"
+    -- --accept-all-defaults
