@@ -8,6 +8,10 @@ terraform {
       source  = "oracle/oci"
       version = ">= 5.30, < 6.0"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9, < 1.0"
+    }
   }
 
   # Partial backend config — real values (bucket/namespace/tenancy/user/etc.) are
