@@ -1,0 +1,55 @@
+## Palworld dedicated server, deployed to /opt/palworld/docker-compose.yml on the game
+## VM (the path infrastructure/cloud-init/game-vm.yaml's palworld-ctl script hardcodes).
+## Reads its environment from a sibling .env file at deploy time (scripts/deploy.sh
+## renders one from the repo root's .env.local — see .env.example for the full list
+## of PALWORLD_*/RCON_* variables this references; not duplicated here).
+##
+## Image: thijsvanloef/palworld-server-docker — actively maintained, RCON support,
+## env-driven config (see CLAUDE.md's architecture decisions).
+services:
+  palworld:
+    image: thijsvanloef/palworld-server-docker:latest
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "Etc/UTC"
+
+      SERVER_NAME: ${PALWORLD_SERVER_NAME}
+      SERVER_DESCRIPTION: ${PALWORLD_SERVER_DESCRIPTION}
+      ADMIN_PASSWORD: ${PALWORLD_ADMIN_PASSWORD}
+      SERVER_PASSWORD: ${PALWORLD_SERVER_PASSWORD}
+      PORT: ${PALWORLD_PUBLIC_PORT}
+      PLAYERS: ${PALWORLD_MAX_PLAYERS}
+
+      # Private friend-group server, not listed publicly — keeps the query port
+      # (used for community-server-list discovery) closed; only the game port
+      # itself needs to be reachable (see infrastructure/terraform/network.tf).
+      COMMUNITY: "false"
+      MULTITHREADING: "true"
+
+      # RCON is how the bot controls the server (start/stop broadcast, countdown,
+      # player queries) — required, not optional, for this project.
+      RCON_ENABLED: "true"
+      RCON_PORT: ${RCON_PORT}
+
+      # This image ships its own local backup/cron feature — explicitly disabled.
+      # Phase 3's backup.sh owns backups (RCON save + upload to Object Storage with
+      # a real retention policy); leaving this on would accumulate a second,
+      # unmanaged set of local backups on the same disk indefinitely.
+      BACKUP_ENABLED: "false"
+
+      UPDATE_ON_BOOT: "true"
+    ports:
+      - "${PALWORLD_PUBLIC_PORT}:${PALWORLD_PUBLIC_PORT}/udp"
+      # RCON must be published to the host — the bot connects from an entirely
+      # separate VM, and Docker's default bridge network isn't reachable from
+      # outside the host at all unless a port is published. Safety here comes from
+      # a different layer, not from omitting this: infrastructure/terraform/
+      # compute-bot.tf's cross-NSG rule means only the bot VM's NSG can even reach
+      # this host's RCON port on the network in the first place (same
+      # defense-in-depth pattern as the admin-only-restricted SSH port).
+      - "${RCON_PORT}:${RCON_PORT}/tcp"
+    volumes:
+      - /mnt/palworld-data:/palworld
