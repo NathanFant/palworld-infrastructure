@@ -29,12 +29,11 @@ resource "oci_core_route_table" "public" {
   }
 }
 
-# RCON is restricted to var.subnet_cidr (the whole subnet), not a single instance /32.
-# The bot VM's private IP isn't known at this point in the build — Terraform tickets
-# land as separate PRs, and the bot VM is provisioned in a later one. Since this subnet
-# only ever holds these two VMs, subnet-CIDR scoping is materially equivalent to
-# instance-level scoping here (no third host could ever be in-subnet to exploit it),
-# without coupling this security list to a resource that doesn't exist yet.
+# RCON is intentionally NOT in this security list — it's scoped at the instance level
+# via a cross-NSG rule in compute-bot.tf (oci_core_network_security_group_security_rule),
+# restricting it to traffic from the bot VM's NSG specifically, not the whole subnet.
+# This replaced an earlier subnet-CIDR-based rule once the bot VM (and its NSG) existed
+# to reference — see the review discussion on issues #9/#10.
 resource "oci_core_security_list" "main" {
   compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.main.id
@@ -59,17 +58,6 @@ resource "oci_core_security_list" "main" {
     udp_options {
       min = var.palworld_port
       max = var.palworld_port
-    }
-  }
-
-  ingress_security_rules {
-    protocol    = "6" # TCP
-    source      = var.subnet_cidr
-    description = "RCON — restricted to this VCN's own subnet (bot VM), never public"
-
-    tcp_options {
-      min = var.rcon_port
-      max = var.rcon_port
     }
   }
 
