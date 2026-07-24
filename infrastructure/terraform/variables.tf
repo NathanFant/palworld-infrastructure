@@ -58,3 +58,40 @@ variable "rcon_port" {
   type        = number
   default     = 25575
 }
+
+# --- Backups (Object Storage) ---
+# Retention windows mirror the tiers documented in the README (hourly: 24, daily: 7,
+# weekly: 4, monthly: 6), translated to day-based expiry since Object Storage
+# lifecycle policies expire by object age + name prefix, not by keeping a fixed count.
+# backup.sh (a later, separate ticket) is expected to write objects under the matching
+# prefix (e.g. "daily/palworld-<timestamp>.tar.gz").
+
+variable "backup_bucket_name" {
+  description = "Object Storage bucket name for world-save backups. Matches .env.example's OCI_BACKUP_BUCKET_NAME."
+  type        = string
+  default     = "palworld-backups"
+}
+
+variable "backup_retention_hourly_days" {
+  description = "Expire objects under hourly/ after this many days (24 hourly backups ~= 1 day)."
+  type        = number
+  default     = 1
+}
+
+variable "backup_retention_daily_days" {
+  description = "Expire objects under daily/ after this many days."
+  type        = number
+  default     = 7
+}
+
+variable "backup_retention_weekly_days" {
+  description = "Expire objects under weekly/ after this many days (4 weeks)."
+  type        = number
+  default     = 28
+}
+
+variable "backup_retention_monthly_days" {
+  description = "Expire objects under monthly/ after this many days (6 months)."
+  type        = number
+  default     = 180
+}
