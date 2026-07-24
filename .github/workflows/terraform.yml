@@ -12,7 +12,6 @@ on:
 # against real Oracle Cloud resources. See CLAUDE.md / CONTRIBUTING.md.
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   plan:
@@ -26,7 +25,7 @@ jobs:
       - name: Check for Terraform config
         id: has-tf
         run: |
-          if compgen -G "*.tf" > /dev/null || compgen -G "**/*.tf" > /dev/null; then
+          if [ -n "$(find . -name '*.tf' -print -quit)" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
