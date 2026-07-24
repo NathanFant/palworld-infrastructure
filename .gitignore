@@ -18,6 +18,7 @@ crash.*.log
 backend.hcl
 !backend.hcl.example
 .terraform.lock.hcl.bak
+*.tfplan
 override.tf
 override.tf.json
 *_override.tf

@@ -23,14 +23,14 @@ resource "oci_core_network_security_group" "game" {
 
 resource "oci_core_volume" "world_data" {
   compartment_id      = var.compartment_ocid
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   display_name        = "palworld-world-data"
   size_in_gbs         = var.game_volume_size_gb
 }
 
 resource "oci_core_instance" "game" {
   compartment_id      = var.compartment_ocid
-  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[0].name
+  availability_domain = data.oci_identity_availability_domains.ads.availability_domains[var.availability_domain_index].name
   display_name        = "palworld-game-vm"
   shape               = "VM.Standard.A1.Flex"
 

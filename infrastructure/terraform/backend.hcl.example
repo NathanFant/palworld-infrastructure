@@ -1,18 +1,19 @@
-# Copy to backend.hcl (gitignored) and fill in real values, produced by applying
-# infrastructure/terraform-bootstrap once. Used as:
+# Copy to backend.hcl (gitignored) and fill in real values. Used as:
 #   terraform init -backend-config=backend.hcl
 #
-# Also requires AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars set to the OCI
-# Customer Secret Key pair that infrastructure/terraform-bootstrap creates — this is
-# a *different* credential from the tenancy/user OCID + API key used by the oci
-# provider itself (see provider.tf).
+# Uses Terraform's native `oci` backend (requires Terraform >= 1.12), authenticating
+# with the *same* tenancy/user OCID + API key as the oci provider itself (provider.tf)
+# — unlike the S3-compatible-endpoint approach this replaced, there's no separate
+# Customer Secret Key credential needed for the backend.
+#
+# namespace and the state bucket itself are produced by applying
+# infrastructure/terraform-bootstrap once (see its README.md).
 
-bucket                      = "palworld-tfstate"
-key                         = "palworld-infrastructure/terraform.tfstate"
-region                      = "us-ashburn-1"
-endpoint                    = "https://<namespace>.compat.objectstorage.us-ashburn-1.oraclecloud.com"
-skip_region_validation      = true
-skip_credentials_validation = true
-skip_metadata_api_check     = true
-skip_requesting_account_id  = true
-force_path_style            = true
+bucket           = "palworld-tfstate"
+namespace        = "<namespace, from terraform-bootstrap's output>"
+key              = "palworld-infrastructure/terraform.tfstate"
+region           = "us-ashburn-1"
+tenancy_ocid     = "ocid1.tenancy.oc1..exampleuniqueID"
+user_ocid        = "ocid1.user.oc1..exampleuniqueID"
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.oci/oci_api_key.pem"
