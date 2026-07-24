@@ -1,7 +1,9 @@
 # Contributing
 
 This repo (including work done by agents) follows a ticket -> PR -> independent-review pipeline. See `CLAUDE.md`
-for the architecture and rationale; this file covers the mechanics.
+for the architecture and rationale; this file covers the mechanics. See
+[`docs/claude-workflow.md`](docs/claude-workflow.md) for the working habits an agent should follow day to day on
+top of this mechanic (verification standards, comment style, how review is actually conducted).
 
 ## 1. Open a ticket
 
