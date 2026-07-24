@@ -62,6 +62,79 @@ write_files:
           ;;
       esac
 
+  - path: /etc/systemd/system/palworld-backup@.service
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Palworld backup (%i)
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      User=palworld-bot
+      ExecStart=/opt/palworld/backup.sh %i
+
+  - path: /etc/systemd/system/palworld-backup-hourly.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Hourly Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@hourly.service
+      OnCalendar=hourly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/palworld-backup-daily.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Daily Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@daily.service
+      OnCalendar=daily
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/palworld-backup-weekly.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Weekly Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@weekly.service
+      OnCalendar=weekly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/palworld-backup-monthly.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Monthly Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@monthly.service
+      OnCalendar=monthly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
 runcmd:
   # --- Docker Engine + Compose plugin, from Docker's official apt repo ---
   # (Ubuntu's own docker.io package lags behind the "docker compose" plugin support
@@ -112,3 +185,16 @@ runcmd:
     test -x /usr/local/bin/oci ||
     bash -c "$(curl -Ls https://raw.githubusercontent.com/oracle/oci-cli/master/scripts/install/install.sh)"
     -- --accept-all-defaults
+
+  # --- Backup timers ---
+  # backup.sh/restore.sh themselves are deployed separately by scripts/deploy.sh, not
+  # by cloud-init -- these timers will fail (and self-heal once deployed) if a timer
+  # fires before the first deploy.sh run, which is expected: there's nothing to back
+  # up before a world exists anyway.
+  - systemctl daemon-reload
+  - >
+    systemctl enable --now
+    palworld-backup-hourly.timer
+    palworld-backup-daily.timer
+    palworld-backup-weekly.timer
+    palworld-backup-monthly.timer
