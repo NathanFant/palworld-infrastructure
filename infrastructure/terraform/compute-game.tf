@@ -54,7 +54,8 @@ resource "oci_core_instance" "game" {
   is_pv_encryption_in_transit_enabled = true
 
   metadata = {
-    user_data = base64encode(templatefile("${path.module}/../cloud-init/game-vm.yaml", {
+    ssh_authorized_keys = var.admin_ssh_public_key
+    user_data           = base64encode(templatefile("${path.module}/../cloud-init/game-vm.yaml", {
       palworld_bot_ssh_public_key = var.palworld_bot_ssh_public_key
     }))
   }
