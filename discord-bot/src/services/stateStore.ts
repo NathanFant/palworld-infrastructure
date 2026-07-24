@@ -6,12 +6,17 @@ import { config } from "../config.js";
 export interface BotState {
   serverStartedAt: string | null;
   statusMessageId: string | null;
+  /** Live-edited "who's in voice" message -- separate from statusMessageId (the
+   * server up/down heartbeat's own message) so the two features never clobber
+   * each other's message. */
+  voicePresenceMessageId: string | null;
   lastKnownUp: boolean;
 }
 
 const DEFAULT_STATE: BotState = {
   serverStartedAt: null,
   statusMessageId: null,
+  voicePresenceMessageId: null,
   lastKnownUp: false,
 };
 
@@ -23,6 +28,7 @@ function isBotState(value: unknown): value is BotState {
   return (
     (typeof v.serverStartedAt === "string" || v.serverStartedAt === null) &&
     (typeof v.statusMessageId === "string" || v.statusMessageId === null) &&
+    (typeof v.voicePresenceMessageId === "string" || v.voicePresenceMessageId === null) &&
     typeof v.lastKnownUp === "boolean"
   );
 }
