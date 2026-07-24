@@ -73,7 +73,9 @@ This is how every change in this repo gets made:
 5. **Address feedback**, push updates, re-review if the changes are substantive.
 6. **Merge is a human-approved step, always.** So is any `terraform apply`, any action touching the real Oracle account, and any action touching the live Discord bot token/production channels. Don't merge or apply on your own initiative — surface it and wait.
 
-See `CONTRIBUTING.md` for the mechanical details (branch naming, PR template, label reference).
+See `CONTRIBUTING.md` for the mechanical details (branch naming, PR template, label reference) — introduced
+alongside this file as a companion ticket; if you're reading this before that PR merged, the templates it
+describes may not exist on `main` yet.
 
 ## Ticket backlog (execution order)
 
