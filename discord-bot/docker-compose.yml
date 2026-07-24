@@ -1,0 +1,22 @@
+# Discord bot, deployed to /opt/palworld-bot/docker-compose.yml on the bot VM (the
+# path infrastructure/cloud-init/bot-vm.yaml creates and scripts/deploy-bot.sh ships
+# to). Reads its environment from a sibling .env file rendered by deploy-bot.sh from
+# the repo root's .env.local -- see .env.example for the full variable list.
+#
+# Unlike docker/compose.yml (the Palworld server, deliberately started/stopped on
+# demand), this container is meant to run continuously: it's what makes /server
+# start possible in the first place, so it can't be the thing waiting to be started
+# (see CLAUDE.md's "two always-on VMs" decision).
+services:
+  discord-bot:
+    image: ${DISCORD_BOT_IMAGE:-ghcr.io/nathanfant/palworld-infrastructure/discord-bot:latest}
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persists BOT_STATE_FILE_PATH's default (./data/state.json, resolved against
+      # the container's /app working directory) across image updates/restarts.
+      - ./data:/app/data
+      # The bot's forced-command-restricted SSH key (GAME_VM_SSH_PRIVATE_KEY_PATH) --
+      # read-only, since the bot only ever needs to present it, never modify it.
+      - ./secrets:/app/secrets:ro

@@ -29,6 +29,22 @@ validate at the point of use, not at boot.
 
 Built via the multi-stage `Dockerfile` (compile stage, then a slim runtime image with
 only production dependencies) and deployed to the bot VM's own `docker compose`
-setup — separate from the game VM entirely, so the bot stays reachable even when the
-Palworld container is fully stopped (see `CLAUDE.md`'s architecture decisions).
-Publishing the built image and the actual deploy step are Phase 7 (not built yet).
+setup (`docker-compose.yml` in this directory) — separate from the game VM entirely,
+so the bot stays reachable even when the Palworld container is fully stopped (see
+`CLAUDE.md`'s architecture decisions).
+
+- **Image publishing** (`.github/workflows/bot-cd.yml`'s `publish` job) is automatic:
+  every merge to `main` touching `discord-bot/**` re-verifies (lint/typecheck/test/
+  build) then pushes `ghcr.io/nathanfant/palworld-infrastructure/discord-bot` tagged
+  with both the commit SHA and `latest`.
+- **First-time / credential-rotation deploys** use `scripts/deploy-bot.sh`, run
+  manually — it's the one place the live Discord bot token and the game VM's SSH
+  private key get shipped to the bot VM, deliberately kept out of GitHub Actions
+  entirely (see `CLAUDE.md`'s stance on the live bot token staying a human-approved
+  action).
+- **Subsequent rollouts** (after `deploy-bot.sh` has run once) use the same
+  workflow's `deploy` job, triggered manually via `workflow_dispatch` ("Run
+  workflow" in the Actions UI) — never automatically on merge. It only needs SSH
+  access (repo Variables `BOT_VM_HOST`/`BOT_VM_SSH_USER`, and Secret
+  `BOT_VM_SSH_PRIVATE_KEY`) to pull the new image and recreate the container; it
+  never touches the bot's own secrets.

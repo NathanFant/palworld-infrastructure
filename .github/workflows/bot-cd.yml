@@ -1,0 +1,96 @@
+name: Bot CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "discord-bot/**"
+      - ".github/workflows/bot-cd.yml"
+  workflow_dispatch: {}
+
+env:
+  IMAGE_NAME: ghcr.io/nathanfant/palworld-infrastructure/discord-bot
+
+jobs:
+  test:
+    # Re-verifies main before publishing an image from it -- bot-ci.yml already
+    # gates the PR itself, but this is CD's own safety net in case main and a PR's
+    # checked-out state ever diverge (e.g. a squash conflict, an admin override).
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: discord-bot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: discord-bot/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  publish:
+    # Automatic: builds and pushes a Docker image on every merge to main that
+    # touches the bot. Safe to automate -- publishing an image tag is a build
+    # artifact, not a change to any live system (see CLAUDE.md: CI never
+    # auto-deploys). The actual rollout is the separate `deploy` job below, which
+    # only ever runs when a human explicitly triggers it.
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: discord-bot
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+
+  deploy:
+    # Manual only. This restarts the process holding the live Discord bot token --
+    # per CLAUDE.md, that stays an explicit, human-approved action regardless of
+    # how cleanly the image was built, so this job only ever runs from a manually
+    # triggered `workflow_dispatch` ("Run workflow" in the Actions UI), never as a
+    # consequence of a push/merge. It never sees the bot's real secrets either --
+    # those are already on the VM from a prior scripts/deploy-bot.sh run; this job
+    # only needs SSH access to pull the new image and recreate the container.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.BOT_VM_SSH_PRIVATE_KEY }}
+
+      - name: Pull the new image and restart the bot
+        # BOT_VM_HOST/BOT_VM_SSH_USER are plain repo Variables, not Secrets -- a
+        # hostname and username aren't sensitive; only the private key above is.
+        run: |
+          ssh -o StrictHostKeyChecking=accept-new "${{ vars.BOT_VM_SSH_USER }}@${{ vars.BOT_VM_HOST }}" '
+            cd /opt/palworld-bot &&
+            sudo -u bot docker compose pull &&
+            sudo -u bot docker compose up -d
+          '

@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+# Ships discord-bot/docker-compose.yml, the bot's forced-command-restricted SSH
+# private key, and a rendered .env to /opt/palworld-bot/ on the bot VM, then starts
+# (or restarts) it. Uses the ADMIN ssh key (a real shell), never the bot's own
+# restricted key -- shipping secrets/config is a human/admin action, per CLAUDE.md.
+#
+# This is the one place the live Discord bot token and the game VM's SSH private key
+# are handled -- deliberately a manually-run script, not something GitHub Actions
+# touches (see .github/workflows/bot-cd.yml's deploy job, which only pulls/restarts
+# an already-configured deployment over SSH and never sees these secrets).
+#
+# Unlike scripts/deploy.sh (the Palworld server, which deliberately does NOT start
+# the service it deploys), this script does start the container -- the bot has no
+# "server's currently off" state of its own; it's what makes /server start possible
+# in the first place.
+#
+# Usage: scripts/deploy-bot.sh
+# Reads config from .env.local at the repo root.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+ENV_LOCAL="${REPO_ROOT}/.env.local"
+
+if [ ! -f "${ENV_LOCAL}" ]; then
+  echo "Missing ${ENV_LOCAL} -- copy .env.example to .env.local and fill in real values first." >&2
+  exit 1
+fi
+
+# Reads a single KEY=VALUE line rather than sourcing the whole file -- same reasoning
+# as scripts/deploy.sh: .env.local is operator-edited data, not something this script
+# should risk evaluating as shell.
+env_get() {
+  local key="$1"
+  grep -E "^${key}=" "${ENV_LOCAL}" | tail -n1 | cut -d '=' -f2-
+}
+
+BOT_VM_HOST="$(env_get BOT_VM_HOST)"
+ADMIN_SSH_USER="$(env_get ADMIN_SSH_USER)"
+ADMIN_SSH_PRIVATE_KEY_PATH="$(env_get ADMIN_SSH_PRIVATE_KEY_PATH)"
+GAME_VM_SSH_PRIVATE_KEY_PATH="$(env_get GAME_VM_SSH_PRIVATE_KEY_PATH)"
+
+if [ -z "${BOT_VM_HOST}" ] || [ -z "${ADMIN_SSH_USER}" ] || [ -z "${ADMIN_SSH_PRIVATE_KEY_PATH}" ]; then
+  echo "BOT_VM_HOST, ADMIN_SSH_USER, and ADMIN_SSH_PRIVATE_KEY_PATH must all be set in .env.local." >&2
+  exit 1
+fi
+
+if [ -z "${GAME_VM_SSH_PRIVATE_KEY_PATH}" ] || [ ! -f "${GAME_VM_SSH_PRIVATE_KEY_PATH}" ]; then
+  echo "GAME_VM_SSH_PRIVATE_KEY_PATH must point at an existing file -- the bot needs its own private key to reach the game VM." >&2
+  exit 1
+fi
+
+SSH_TARGET="${ADMIN_SSH_USER}@${BOT_VM_HOST}"
+SSH_OPTS=(-i "${ADMIN_SSH_PRIVATE_KEY_PATH}" -o StrictHostKeyChecking=accept-new)
+
+# Rendered .env holds the real Discord bot token and RCON password -- a private temp
+# file, never the repo, removed as soon as it's copied over.
+RENDERED_ENV="$(mktemp)"
+trap 'rm -f "${RENDERED_ENV}"' EXIT
+chmod 600 "${RENDERED_ENV}"
+
+{
+  echo "DISCORD_BOT_TOKEN=$(env_get DISCORD_BOT_TOKEN)"
+  echo "DISCORD_CLIENT_ID=$(env_get DISCORD_CLIENT_ID)"
+  echo "DISCORD_GUILD_ID=$(env_get DISCORD_GUILD_ID)"
+  echo "DISCORD_VOICE_CHANNEL_ID=$(env_get DISCORD_VOICE_CHANNEL_ID)"
+  echo "DISCORD_STATUS_CHANNEL_ID=$(env_get DISCORD_STATUS_CHANNEL_ID)"
+  echo "DISCORD_ADMIN_ROLE_ID=$(env_get DISCORD_ADMIN_ROLE_ID)"
+  echo "GAME_VM_HOST=$(env_get GAME_VM_HOST)"
+  echo "GAME_VM_SSH_PORT=$(env_get GAME_VM_SSH_PORT)"
+  echo "GAME_VM_SSH_USER=$(env_get GAME_VM_SSH_USER)"
+  echo "GAME_VM_SSH_PRIVATE_KEY_PATH=$(env_get GAME_VM_SSH_PRIVATE_KEY_PATH)"
+  echo "RCON_HOST=$(env_get RCON_HOST)"
+  echo "RCON_PORT=$(env_get RCON_PORT)"
+  echo "RCON_PASSWORD=$(env_get RCON_PASSWORD)"
+  echo "SERVER_RESTART_INTERVAL_HOURS=$(env_get SERVER_RESTART_INTERVAL_HOURS)"
+  echo "BOT_STATE_FILE_PATH=$(env_get BOT_STATE_FILE_PATH)"
+} > "${RENDERED_ENV}"
+
+echo "Ensuring /opt/palworld-bot exists on ${BOT_VM_HOST}..."
+# Owned by "bot" (infrastructure/cloud-init/bot-vm.yaml's dedicated user), not the
+# admin user running this script -- the container itself runs as this user.
+ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "sudo mkdir -p /opt/palworld-bot/secrets && sudo chown -R bot:docker /opt/palworld-bot"
+
+echo "Copying docker-compose.yml, the game VM SSH key, and .env..."
+scp "${SSH_OPTS[@]}" "${REPO_ROOT}/discord-bot/docker-compose.yml" "${SSH_TARGET}:/tmp/docker-compose.yml"
+scp "${SSH_OPTS[@]}" "${GAME_VM_SSH_PRIVATE_KEY_PATH}" "${SSH_TARGET}:/tmp/palworld-bot-ssh-key"
+scp "${SSH_OPTS[@]}" "${RENDERED_ENV}" "${SSH_TARGET}:/tmp/.env"
+# scp'd to /tmp first, then moved into place with the right owner/mode -- scp itself
+# can't set the destination owner, and leaving these admin-owned would block the
+# "bot" user's container from reading them (especially the SSH private key, which
+# most SSH clients refuse outright to use if group/world-readable).
+ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" '
+  set -euo pipefail
+  sudo install -o bot -g docker -m 0644 /tmp/docker-compose.yml /opt/palworld-bot/docker-compose.yml
+  sudo install -o bot -g docker -m 0600 /tmp/palworld-bot-ssh-key /opt/palworld-bot/secrets/palworld-bot-ssh-key
+  sudo install -o bot -g docker -m 0600 /tmp/.env /opt/palworld-bot/.env
+  sudo mkdir -p /opt/palworld-bot/data
+  sudo chown bot:docker /opt/palworld-bot/data
+  rm -f /tmp/docker-compose.yml /tmp/palworld-bot-ssh-key /tmp/.env
+'
+
+echo "Pulling latest image and starting the bot..."
+ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "cd /opt/palworld-bot && sudo -u bot docker compose pull && sudo -u bot docker compose up -d"
+
+echo "Deployed and running. Subsequent image updates can go through .github/workflows/bot-cd.yml's deploy job instead of rerunning this script."
