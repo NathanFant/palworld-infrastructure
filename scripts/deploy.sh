@@ -60,6 +60,12 @@ ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "sudo mkdir -p /opt/palworld && sudo chown 
 echo "Copying docker-compose.yml and .env..."
 scp "${SSH_OPTS[@]}" "${REPO_ROOT}/docker/compose.yml" "${SSH_TARGET}:/opt/palworld/docker-compose.yml"
 scp "${SSH_OPTS[@]}" "${RENDERED_ENV}" "${SSH_TARGET}:/opt/palworld/.env"
+# scp doesn't preserve file mode, so the careful local chmod 600 above wouldn't
+# otherwise survive the copy -- the remote .env (holding real PALWORLD_ADMIN_PASSWORD/
+# PALWORLD_SERVER_PASSWORD in plaintext) would land at the remote user's default
+# umask, commonly world-readable. Lock it down explicitly rather than relying on
+# scp -p, which depends on umask/implementation behavior on the remote end.
+ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "chmod 600 /opt/palworld/.env"
 
 echo "Pulling latest image..."
 ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "cd /opt/palworld && docker compose pull"
