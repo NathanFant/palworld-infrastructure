@@ -37,10 +37,19 @@ Run the retry loop and leave it running — it can take anywhere from minutes to
 (occasionally longer) depending on regional demand:
 
 ```powershell
-powershell -File scripts/retry-apply.ps1
+powershell -ExecutionPolicy Bypass -File scripts/retry-apply.ps1
 ```
+
+`-ExecutionPolicy Bypass` is required on a default Windows install (unsigned local
+scripts are blocked otherwise); it only affects this one invocation, not the
+system-wide policy.
 
 Each attempt runs a fresh `terraform apply -auto-approve` (not a stale saved plan), so
 it only ever tries to create whatever's still missing from state — already-created
 resources (networking, storage, etc.) are left alone. Defaults to checking every 60s
-for up to 500 attempts; override with `-IntervalSeconds` / `-MaxAttempts`.
+for up to 500 attempts; override with `-IntervalSeconds` / `-MaxAttempts` -- e.g.
+`-IntervalSeconds 120 -MaxAttempts 5000` for a much longer unattended run once it's
+clear a single default 500-attempt pass (~8 hours) isn't going to be enough.
+
+Once apply actually succeeds, continue with
+[`post-allocation-checklist.md`](post-allocation-checklist.md) for what to do next.
