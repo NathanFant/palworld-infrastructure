@@ -13,3 +13,7 @@ admin_ssh_cidr = "203.0.113.4/32"
 
 # vcn_cidr, subnet_cidr, palworld_port, rcon_port all have sensible defaults (see
 # variables.tf) — only override if you need something non-standard.
+
+# Public half of the dedicated keypair from `ssh-keygen -t ed25519 -f palworld-bot-key`
+# (see infrastructure/cloud-init/README.md for the full generation/injection flow).
+palworld_bot_ssh_public_key = "ssh-ed25519 AAAA...REPLACE_WITH_REAL_PUBLIC_KEY... palworld-discord-bot"
