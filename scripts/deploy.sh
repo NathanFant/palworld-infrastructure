@@ -52,20 +52,33 @@ chmod 600 "${RENDERED_ENV}"
   echo "PALWORLD_PUBLIC_PORT=$(env_get PALWORLD_PUBLIC_PORT)"
   echo "PALWORLD_MAX_PLAYERS=$(env_get PALWORLD_MAX_PLAYERS)"
   echo "RCON_PORT=$(env_get RCON_PORT)"
+  echo "OCI_BACKUP_BUCKET_NAME=$(env_get OCI_BACKUP_BUCKET_NAME)"
+  echo "OCI_BACKUP_NAMESPACE=$(env_get OCI_BACKUP_NAMESPACE)"
 } > "${RENDERED_ENV}"
 
 echo "Ensuring /opt/palworld exists on ${GAME_VM_HOST}..."
-ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "sudo mkdir -p /opt/palworld && sudo chown \$(whoami):\$(whoami) /opt/palworld"
+# Owned by palworld-bot (not the admin user running this script) -- palworld-ctl and
+# the backup.sh systemd service both run as palworld-bot and need to read these files.
+ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "sudo mkdir -p /opt/palworld && sudo chown palworld-bot:docker /opt/palworld"
 
-echo "Copying docker-compose.yml and .env..."
-scp "${SSH_OPTS[@]}" "${REPO_ROOT}/docker/compose.yml" "${SSH_TARGET}:/opt/palworld/docker-compose.yml"
-scp "${SSH_OPTS[@]}" "${RENDERED_ENV}" "${SSH_TARGET}:/opt/palworld/.env"
-# scp doesn't preserve file mode, so the careful local chmod 600 above wouldn't
-# otherwise survive the copy -- the remote .env (holding real PALWORLD_ADMIN_PASSWORD/
-# PALWORLD_SERVER_PASSWORD in plaintext) would land at the remote user's default
-# umask, commonly world-readable. Lock it down explicitly rather than relying on
-# scp -p, which depends on umask/implementation behavior on the remote end.
-ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "chmod 600 /opt/palworld/.env"
+echo "Copying docker-compose.yml, backup/restore scripts, and .env..."
+scp "${SSH_OPTS[@]}" "${REPO_ROOT}/docker/compose.yml" "${SSH_TARGET}:/tmp/docker-compose.yml"
+scp "${SSH_OPTS[@]}" "${REPO_ROOT}/backups/backup.sh" "${SSH_TARGET}:/tmp/backup.sh"
+scp "${SSH_OPTS[@]}" "${REPO_ROOT}/backups/restore.sh" "${SSH_TARGET}:/tmp/restore.sh"
+scp "${SSH_OPTS[@]}" "${RENDERED_ENV}" "${SSH_TARGET}:/tmp/.env"
+# scp'd to /tmp first, then moved into place with the right owner/mode -- scp itself
+# has no way to set the destination owner, and leaving these admin-owned (or at
+# scp's default umask) would block palworld-bot (backup.sh's systemd service, and
+# palworld-ctl) from reading them, especially .env's real PALWORLD_ADMIN_PASSWORD/
+# PALWORLD_SERVER_PASSWORD.
+ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" '
+  set -euo pipefail
+  sudo install -o palworld-bot -g docker -m 0644 /tmp/docker-compose.yml /opt/palworld/docker-compose.yml
+  sudo install -o palworld-bot -g docker -m 0755 /tmp/backup.sh /opt/palworld/backup.sh
+  sudo install -o palworld-bot -g docker -m 0755 /tmp/restore.sh /opt/palworld/restore.sh
+  sudo install -o palworld-bot -g docker -m 0600 /tmp/.env /opt/palworld/.env
+  rm -f /tmp/docker-compose.yml /tmp/backup.sh /tmp/restore.sh /tmp/.env
+'
 
 echo "Pulling latest image..."
 ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "cd /opt/palworld && docker compose pull"
