@@ -1,0 +1,35 @@
+name: cloud-init
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/cloud-init/**.yaml"
+      - "infrastructure/cloud-init/**.yml"
+      - ".github/workflows/cloud-init.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure cloud-init is available
+        run: command -v cloud-init || (sudo apt-get update -y && sudo apt-get install -y cloud-init)
+
+      - name: Validate cloud-config schema
+        run: |
+          shopt -s nullglob
+          files=(infrastructure/cloud-init/*.yaml infrastructure/cloud-init/*.yml)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No cloud-init files found."
+            exit 0
+          fi
+          status=0
+          for f in "${files[@]}"; do
+            echo "== $f =="
+            cloud-init schema --config-file "$f" || status=$?
+          done
+          exit "$status"

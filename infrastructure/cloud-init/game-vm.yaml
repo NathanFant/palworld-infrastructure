@@ -1,0 +1,93 @@
+#cloud-config
+# User-data for the Ampere A1 game VM. Rendered via Terraform's templatefile() in the
+# Terraform game-VM ticket, which supplies ${palworld_bot_ssh_public_key} — the public
+# half of a dedicated keypair generated for the bot's SSH access (see README.md in
+# this directory for the generation/injection flow). This file only prepares the
+# environment (Docker, mount, control user, hardening); the actual Palworld
+# docker-compose.yml is deployed separately by scripts/deploy.sh (Phase 2/later).
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - fail2ban
+  - unattended-upgrades
+
+users:
+  - default
+  - name: palworld-bot
+    gecos: "Restricted control account for the Discord bot's SSH access"
+    groups: [docker]
+    shell: /bin/bash
+    lock_passwd: true
+    # command= restricts this key to ONLY run palworld-ctl, with whatever subcommand
+    # the bot sent, no interactive shell — see README.md for the full rationale.
+    ssh_authorized_keys:
+      - 'command="/usr/local/bin/palworld-ctl $SSH_ORIGINAL_COMMAND",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ${palworld_bot_ssh_public_key}'
+
+write_files:
+  - path: /usr/local/bin/palworld-ctl
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      # Forced-command target for the bot's SSH key — see cloud-init/README.md.
+      # Only ever invoked as: ssh palworld-bot@game-vm {start|stop|status}
+      # $SSH_ORIGINAL_COMMAND is untrusted input from the SSH client; treat it as such.
+      set -euo pipefail
+
+      COMPOSE_FILE="/opt/palworld/docker-compose.yml"
+      COMPOSE="docker compose -f $${COMPOSE_FILE}"
+
+      case "$${1:-}" in
+        start)
+          exec $${COMPOSE} up -d
+          ;;
+        stop)
+          exec $${COMPOSE} down
+          ;;
+        status)
+          exec $${COMPOSE} ps --format json
+          ;;
+        *)
+          echo "usage: palworld-ctl {start|stop|status}" >&2
+          exit 64
+          ;;
+      esac
+
+runcmd:
+  # --- Docker Engine + Compose plugin, from Docker's official apt repo ---
+  # (Ubuntu's own docker.io package lags behind the "docker compose" plugin support
+  # this project's control scripts assume.)
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - >
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
+    | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update -y
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+  # --- fail2ban / unattended-upgrades: install already covers defaults; just enable ---
+  - systemctl enable --now fail2ban
+  - dpkg-reconfigure -f noninteractive unattended-upgrades
+
+  # --- World-save Block Volume: format once (if unformatted) and mount persistently ---
+  # /dev/oracleoci/oraclevdb is OCI's documented stable path for the second
+  # paravirtualized-attached volume (boot volume is oraclevda). `nofail` in fstab so a
+  # boot doesn't hang if the volume isn't attached yet.
+  - mkdir -p /mnt/palworld-data
+  - >
+    blkid /dev/oracleoci/oraclevdb || mkfs.ext4 /dev/oracleoci/oraclevdb
+  - >
+    grep -q oraclevdb /etc/fstab ||
+    echo "/dev/oracleoci/oraclevdb /mnt/palworld-data ext4 defaults,nofail 0 2" >> /etc/fstab
+  - mount -a
+
+  # --- Palworld deploy target directory (compose file itself deployed separately) ---
+  - mkdir -p /opt/palworld
+  - chown palworld-bot:docker /opt/palworld /mnt/palworld-data
