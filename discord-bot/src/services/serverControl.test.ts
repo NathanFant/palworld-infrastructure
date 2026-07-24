@@ -64,7 +64,7 @@ describe("serverControl", () => {
     const result = await serverControl.status();
 
     expect(result.ok).toBe(false);
-    expect(result.stderr).toBe("compose error");
+    expect(result.error).toBe("compose error");
   });
 
   it("returns ok:false without throwing when the SSH connection fails", async () => {
@@ -75,5 +75,37 @@ describe("serverControl", () => {
     expect(result.ok).toBe(false);
     expect(result.error).toContain("ETIMEDOUT");
     expect(disposeMock).toHaveBeenCalled();
+  });
+
+  it("status() parses a single running-container JSON line from docker compose ps", async () => {
+    connectMock.mockResolvedValue(undefined);
+    execCommandMock.mockResolvedValue({
+      code: 0,
+      stdout: JSON.stringify({ Name: "palworld", State: "running" }),
+      stderr: "",
+    });
+
+    const result = await serverControl.status();
+
+    expect(execCommandMock).toHaveBeenCalledWith("status");
+    expect(result).toEqual({ ok: true, status: { running: true, state: "running" } });
+  });
+
+  it("status() reports not running when docker compose ps returns nothing (container absent)", async () => {
+    connectMock.mockResolvedValue(undefined);
+    execCommandMock.mockResolvedValue({ code: 0, stdout: "", stderr: "" });
+
+    const result = await serverControl.status();
+
+    expect(result).toEqual({ ok: true, status: { running: false } });
+  });
+
+  it("status() reports not running (without throwing) if the output isn't valid JSON", async () => {
+    connectMock.mockResolvedValue(undefined);
+    execCommandMock.mockResolvedValue({ code: 0, stdout: "not json", stderr: "" });
+
+    const result = await serverControl.status();
+
+    expect(result).toEqual({ ok: true, status: { running: false } });
   });
 });
