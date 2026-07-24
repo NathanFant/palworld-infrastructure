@@ -68,7 +68,9 @@ async function handleStart(interaction: ChatInputCommandInteraction): Promise<vo
     return;
   }
 
-  await updateState({ serverStartedAt: new Date().toISOString(), lastKnownUp: true });
+  // restartTriggeredAt cleared here too: a manual start always means a fresh clock,
+  // regardless of whether the lifecycle manager had a restart countdown pending.
+  await updateState({ serverStartedAt: new Date().toISOString(), lastKnownUp: true, restartTriggeredAt: null });
   await interaction.editReply("The Palworld server is online.");
 }
 
@@ -83,7 +85,9 @@ async function handleStop(interaction: ChatInputCommandInteraction): Promise<voi
     return;
   }
 
-  await updateState({ lastKnownUp: false });
+  // A manual stop cancels any lifecycle-manager restart countdown that might have
+  // been pending -- there's nothing left to restart.
+  await updateState({ lastKnownUp: false, restartTriggeredAt: null });
   await interaction.editReply("The Palworld server has been stopped.");
 }
 
@@ -128,7 +132,7 @@ async function handleRestart(interaction: ChatInputCommandInteraction): Promise<
     return;
   }
 
-  await updateState({ serverStartedAt: new Date().toISOString(), lastKnownUp: true });
+  await updateState({ serverStartedAt: new Date().toISOString(), lastKnownUp: true, restartTriggeredAt: null });
   await interaction.editReply("The Palworld server has been restarted and is online.");
 }
 

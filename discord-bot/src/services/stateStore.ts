@@ -11,6 +11,11 @@ export interface BotState {
    * each other's message. */
   voicePresenceMessageId: string | null;
   lastKnownUp: boolean;
+  /** Set when the lifecycle manager has triggered the RCON Shutdown countdown for a
+   * scheduled 48h restart, so it doesn't retrigger every check during the lead-time
+   * window. Cleared once the restart cycle completes, or by any manual
+   * /server start|stop|restart. */
+  restartTriggeredAt: string | null;
 }
 
 const DEFAULT_STATE: BotState = {
@@ -18,6 +23,7 @@ const DEFAULT_STATE: BotState = {
   statusMessageId: null,
   voicePresenceMessageId: null,
   lastKnownUp: false,
+  restartTriggeredAt: null,
 };
 
 function isBotState(value: unknown): value is BotState {
@@ -29,7 +35,8 @@ function isBotState(value: unknown): value is BotState {
     (typeof v.serverStartedAt === "string" || v.serverStartedAt === null) &&
     (typeof v.statusMessageId === "string" || v.statusMessageId === null) &&
     (typeof v.voicePresenceMessageId === "string" || v.voicePresenceMessageId === null) &&
-    typeof v.lastKnownUp === "boolean"
+    typeof v.lastKnownUp === "boolean" &&
+    (typeof v.restartTriggeredAt === "string" || v.restartTriggeredAt === null)
   );
 }
 

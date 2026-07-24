@@ -153,7 +153,7 @@ describe("server command: /server stop", () => {
 
     expect(sendRconCommandMock).toHaveBeenCalledWith("Save");
     expect(serverControlStopMock).toHaveBeenCalled();
-    expect(updateStateMock).toHaveBeenCalledWith({ lastKnownUp: false });
+    expect(updateStateMock).toHaveBeenCalledWith({ lastKnownUp: false, restartTriggeredAt: null });
     expect(interaction.editReply).toHaveBeenLastCalledWith(expect.stringContaining("stopped"));
   });
 
