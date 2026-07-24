@@ -133,10 +133,38 @@ describe("renderPresence", () => {
 
     expect(client.channels.fetch).not.toHaveBeenCalled();
   });
+
+  it("serializes concurrent calls so only one message is ever sent, not one per call", async () => {
+    // Stateful mocks (not static return values) -- this is what actually exercises
+    // the race: without serialization, both calls would read voicePresenceMessageId
+    // as null before either write lands, and both would send a new message.
+    let storedMessageId: string | null = null;
+    getStateMock.mockImplementation(() => Promise.resolve({ voicePresenceMessageId: storedMessageId }));
+    updateStateMock.mockImplementation((partial: { voicePresenceMessageId?: string }) => {
+      if (partial.voicePresenceMessageId !== undefined) {
+        storedMessageId = partial.voicePresenceMessageId;
+      }
+      return Promise.resolve();
+    });
+    const editMock = vi.fn().mockResolvedValue(undefined);
+    statusChannel.messages.fetch.mockImplementation((id: string) =>
+      id === "new-message-id" ? Promise.resolve({ edit: editMock }) : Promise.reject(new Error("Unknown Message")),
+    );
+
+    await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      renderPresence(client as any),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      renderPresence(client as any),
+    ]);
+
+    expect(statusChannel.send).toHaveBeenCalledTimes(1);
+    expect(editMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("registerPresenceWatcher", () => {
-  it("registers a voiceStateUpdate listener that only re-renders when the watched channel is touched", () => {
+  it("registers a voiceStateUpdate listener that only re-renders when the watched channel is touched", async () => {
     const handlers: Record<string, (...args: unknown[]) => void> = {};
     const client = {
       on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
@@ -155,11 +183,16 @@ describe("registerPresenceWatcher", () => {
 
     // Unrelated channels -- should not attempt to touch the (undefined) voice channel.
     handlers.voiceStateUpdate({ channelId: "a" }, { channelId: "b" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(client.channels.cache.get).not.toHaveBeenCalled();
 
     // Touches the watched channel -- should attempt to render (and safely no-op
-    // since the mocked channel lookup returns undefined).
+    // since the mocked channel lookup returns undefined). The handler fires this
+    // fire-and-forget (never awaited, matching the real event-listener usage), and
+    // renderPresence() itself now goes through a queue, so the actual work happens
+    // a tick later than the synchronous call above -- flush before asserting.
     handlers.voiceStateUpdate({ channelId: null }, { channelId: "voice-channel-id" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(client.channels.cache.get).toHaveBeenCalledWith("voice-channel-id");
   });
 });

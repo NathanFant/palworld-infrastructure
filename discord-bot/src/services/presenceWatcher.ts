@@ -30,7 +30,7 @@ export function describeVoiceMembers(members: Iterable<MemberLike>): string {
   return `Currently in voice: ${names.join(", ")}`;
 }
 
-export async function renderPresence(client: Client<true>): Promise<void> {
+async function renderPresenceOnce(client: Client<true>): Promise<void> {
   const voiceChannel = client.channels.cache.get(config.discord.voiceChannelId);
   if (!voiceChannel?.isVoiceBased()) {
     console.error(`Voice channel ${config.discord.voiceChannelId} not found or not a voice channel.`);
@@ -58,6 +58,22 @@ export async function renderPresence(client: Client<true>): Promise<void> {
 
   const message = await statusChannel.send(content);
   await updateState({ voicePresenceMessageId: message.id });
+}
+
+// Serializes renderPresence() calls -- without this, two voice events fired in quick
+// succession (e.g. two people joining nearly simultaneously) could both read
+// voicePresenceMessageId as null before either write lands, and both send a new
+// message instead of one editing the other's. Same write-queue pattern as
+// stateStore.ts's updateState(), applied here to the whole read-then-act sequence,
+// not just the final state write.
+let renderQueue: Promise<unknown> = Promise.resolve();
+
+export function renderPresence(client: Client<true>): Promise<void> {
+  const task = renderQueue.then(() => renderPresenceOnce(client));
+  // Keep the queue moving even if this render fails, so one failure doesn't
+  // permanently wedge every future render.
+  renderQueue = task.catch(() => undefined);
+  return task;
 }
 
 export function registerPresenceWatcher(client: Client<true>): void {
