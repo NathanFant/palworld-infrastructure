@@ -173,6 +173,8 @@ This project serves two purposes:
 
 While the workload is a game server, the concepts are broadly applicable to production systems and operational engineering.
 
+See [`docs/decisions/`](docs/decisions/) for the reasoning behind the major infrastructure and process choices.
+
 ---
 
 ## License

@@ -44,6 +44,8 @@ Two things are being built at once:
 - **Terraform remote state on the Object Storage bucket** (OCI's S3-compatible endpoint), bootstrapped once from local state. Demonstrates real IaC practice without leaving the free tier.
 - **CI never runs `terraform apply` and never auto-merges or auto-deploys.** `terraform plan` posts to the PR for review; `apply`, PR merges, and anything touching the real Oracle account or the live Discord bot token are explicit, human-approved actions.
 
+See [`docs/decisions/`](docs/decisions/) for the full reasoning and rejected alternatives behind these and other major choices (Oracle Cloud, Docker, backup strategy, Discord-triggered lifecycle).
+
 ## Repository layout
 
 ```
