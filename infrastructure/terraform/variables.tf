@@ -119,15 +119,38 @@ variable "availability_domain_index" {
 # --- Game VM ---
 
 variable "game_vm_ocpus" {
-  description = "OCPUs for the Ampere A1 game VM. Default is the full Always Free A1 allowance."
+  description = <<-EOT
+    OCPUs for the Ampere A1 game VM. Default is the full Always Free A1 allowance as
+    of Oracle's June 15, 2026 change (see docs/decisions/001-why-oracle.md's update
+    note) -- previously 4. Oracle's own docs state the reduced allowance applies to
+    "all tenancies," but some support responses have reportedly told PAYG-upgraded
+    accounts they keep the old 4 OCPU allowance -- if you've explicitly confirmed a
+    higher limit for your own tenancy (OCI console: Governance -> Limits, Quotas and
+    Usage -> Compute -> VM.Standard.A1.Flex), override this and game_vm_memory_gb
+    accordingly; don't just guess higher.
+  EOT
   type        = number
-  default     = 4
+  default     = 2
+
+  validation {
+    condition     = var.game_vm_ocpus >= 1 && var.game_vm_ocpus <= 4
+    error_message = "game_vm_ocpus should be 1-4 -- above 2 exceeds the documented Always Free allowance unless you've confirmed your tenancy retains the old limit (see this variable's description)."
+  }
 }
 
 variable "game_vm_memory_gb" {
-  description = "Memory (GB) for the Ampere A1 game VM. Default is the full Always Free A1 allowance."
+  description = <<-EOT
+    Memory (GB) for the Ampere A1 game VM. Default is the full Always Free A1
+    allowance as of Oracle's June 15, 2026 change -- previously 24. See
+    game_vm_ocpus's description for the same caveat about tenancy-specific limits.
+  EOT
   type        = number
-  default     = 24
+  default     = 12
+
+  validation {
+    condition     = var.game_vm_memory_gb >= 1 && var.game_vm_memory_gb <= 24
+    error_message = "game_vm_memory_gb should be 1-24 -- above 12 exceeds the documented Always Free allowance unless you've confirmed your tenancy retains the old limit (see this variable's description)."
+  }
 }
 
 variable "game_volume_size_gb" {

@@ -28,6 +28,17 @@ Before assuming it's just capacity:
   limit for `VM.Standard.A1.Flex` / `VM.Standard.E2.1.Micro`).
 - Confirm `terraform plan` shows only the expected resources with no unexpected
   diffs.
+- Confirm `game_vm_ocpus`/`game_vm_memory_gb` (`infrastructure/terraform/variables.tf`)
+  don't request more than your tenancy is actually entitled to. Oracle halved the
+  Always Free A1 allowance from 4 OCPU/24GB to 2 OCPU/12GB on June 15, 2026 (see
+  [`docs/decisions/001-why-oracle.md`'s 2026-07-24 update](../decisions/001-why-oracle.md)
+  for the full investigation) with no public announcement — a request that exceeds
+  your tenancy's actual current limit is a real possibility worth ruling out, and
+  some reports describe Oracle surfacing that as the same generic
+  `Out of host capacity` error rather than a distinct quota error. If you've been
+  retrying against the old 4/24 default, this alone could be the entire cause —
+  it's worth updating to the new default and retrying before assuming it's pure
+  regional scarcity.
 
 If those check out and you're still seeing the errors above, it's capacity.
 
