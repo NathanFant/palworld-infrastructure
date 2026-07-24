@@ -11,6 +11,14 @@ set -euo pipefail
 TIER="${1:?Usage: restore.sh <tier> <object-name>}"
 OBJECT_NAME="${2:?Usage: restore.sh <tier> <object-name>}"
 
+case "${TIER}" in
+  hourly | daily | weekly | monthly) ;;
+  *)
+    echo "invalid tier: ${TIER} (expected hourly|daily|weekly|monthly)" >&2
+    exit 64
+    ;;
+esac
+
 ENV_FILE=/opt/palworld/.env
 if [ ! -f "${ENV_FILE}" ]; then
   echo "Missing ${ENV_FILE} -- run scripts/deploy.sh at least once first." >&2
