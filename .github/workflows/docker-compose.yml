@@ -1,0 +1,22 @@
+name: Docker Compose
+
+on:
+  pull_request:
+    paths:
+      - "docker/**"
+      - ".github/workflows/docker-compose.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ubuntu-latest ships Docker + the compose plugin. `config` validates syntax and
+      # variable interpolation without needing real secrets — missing env vars just
+      # resolve empty rather than failing, which is fine for a structural check.
+      - name: Validate compose file
+        run: docker compose -f docker/compose.yml config
