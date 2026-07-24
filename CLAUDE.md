@@ -22,7 +22,7 @@ Two things are being built at once:
                         |                    |
         +---------------+                    +---------------+
         v                                                     v
- Bot VM (AMD E2.1.Micro, always on)              Game VM (Ampere A1, 4 OCPU/24GB, always on)
+ Bot VM (AMD E2.1.Micro, always on)              Game VM (Ampere A1, 2 OCPU/12GB, always on)
  - Discord bot (Node/TS, discord.js v14)          - Docker + Palworld dedicated server container
  - Slash commands, voice-presence watcher         - RCON on private-subnet-only port
  - Status heartbeat + 48h lifecycle manager       - palworld-ctl wrapper (forced-command SSH)
