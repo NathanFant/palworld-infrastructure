@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { config } from "../config.js";
 
@@ -51,22 +52,47 @@ export async function getState(filePath: string = config.lifecycle.stateFilePath
   return parsed;
 }
 
+// Serializes updateState() calls per file path -- without this, two overlapping
+// calls (e.g. two Discord interactions handled nearly simultaneously) would both
+// read the same "current" state, merge independently, and race to write: the
+// second rename to complete silently wins, discarding the first call's update.
+// Keyed by resolved path so unrelated state files (e.g. in tests) never block
+// each other.
+const writeQueues = new Map<string, Promise<unknown>>();
+
 export async function updateState(
   partial: Partial<BotState>,
   filePath: string = config.lifecycle.stateFilePath,
 ): Promise<BotState> {
-  const current = await getState(filePath);
-  const next: BotState = { ...current, ...partial };
+  const key = path.resolve(filePath);
+  const previous = writeQueues.get(key) ?? Promise.resolve();
 
-  const dir = path.dirname(filePath);
-  await fs.mkdir(dir, { recursive: true });
+  const task = previous.then(async () => {
+    const current = await getState(filePath);
+    const next: BotState = { ...current, ...partial };
 
-  // Atomic write: write to a temp file in the SAME directory (same filesystem is
-  // what makes the rename below atomic), then rename over the real path. A crash
-  // mid-write leaves an orphaned temp file, never a half-written state.json.
-  const tempPath = path.join(dir, `.${path.basename(filePath)}.${process.pid}.tmp`);
-  await fs.writeFile(tempPath, JSON.stringify(next, null, 2), "utf8");
-  await fs.rename(tempPath, filePath);
+    const dir = path.dirname(filePath);
+    await fs.mkdir(dir, { recursive: true });
 
-  return next;
+    // Atomic write: write to a temp file in the SAME directory (same filesystem is
+    // what makes the rename below atomic), then rename over the real path. A crash
+    // mid-write leaves an orphaned temp file, never a half-written state.json.
+    // Unique per call (not just per-process) so queued-but-not-yet-awaited calls
+    // can never collide on the same temp path even if the queueing above were ever
+    // bypassed.
+    const tempPath = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`);
+    await fs.writeFile(tempPath, JSON.stringify(next, null, 2), "utf8");
+    await fs.rename(tempPath, filePath);
+
+    return next;
+  });
+
+  // Keep the queue advancing even if this call fails, so one rejected update
+  // doesn't permanently wedge every future update to the same file.
+  writeQueues.set(
+    key,
+    task.catch(() => undefined),
+  );
+
+  return task;
 }
