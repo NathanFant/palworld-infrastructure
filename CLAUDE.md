@@ -70,12 +70,14 @@ This is how every change in this repo gets made:
 2. **Implementation.** Branch as `feat/<slug>` off `main`, implement against the ticket's acceptance criteria only — no drive-by scope creep.
 3. **PR.** Open a PR that closes the issue (`Closes #N`), following `.github/PULL_REQUEST_TEMPLATE.md`.
 4. **Independent review.** A reviewer with *no implementation context* — a fresh agent session/subagent, not the one that wrote the code — reviews the actual diff for correctness, security (every RCON/SSH/shell boundary gets scrutinized for injection and least-privilege), and whether acceptance criteria are actually met. This independence is the point: it's a genuine second opinion, not the author checking their own work.
-5. **Address feedback**, push updates, re-review if the changes are substantive.
-6. **Merge is a human-approved step, always.** So is any `terraform apply`, any action touching the real Oracle account, and any action touching the live Discord bot token/production channels. Don't merge or apply on your own initiative — surface it and wait.
+5. **Address feedback**, push updates, get the reviewer's explicit confirmation the fix resolves their findings (don't self-judge that a fix is sufficient).
+6. **Merge as soon as review comes back clean** — approved outright, or approved after a confirmed fix. The review is the merge gate; no separate sign-off is needed on top of it.
 
-See `CONTRIBUTING.md` for the mechanical details (branch naming, PR template, label reference) — introduced
-alongside this file as a companion ticket; if you're reading this before that PR merged, the templates it
-describes may not exist on `main` yet.
+The one thing that stays human-approved regardless of review status: anything touching real, hard-to-reverse
+systems — `terraform apply` (CI only ever runs `plan`), the real Oracle Cloud account, or the live Discord bot
+token/production channels. Surface those explicitly and wait for a go-ahead.
+
+See `CONTRIBUTING.md` for the mechanical details (branch naming, PR template, label reference).
 
 ## Ticket backlog (execution order)
 

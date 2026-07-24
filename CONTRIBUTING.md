@@ -44,13 +44,18 @@ acknowledgment is enough for small follow-ups (typos, wording).
 
 ## 6. Merge
 
-**Merging is always a human-approved step** — don't merge your own PR on your own initiative, even after a passing
-review. The same applies to:
+**Merge as soon as the independent review comes back clean** — approved outright, or approved after requested
+changes were made and the reviewer confirmed the fix. No separate merge sign-off is needed on top of that; the
+review *is* the gate. If a review requests changes, address them, get the reviewer's explicit confirmation that
+the fix resolves their findings, then merge — don't merge on your own judgment that a fix "should" be sufficient.
+
+This does **not** extend to actions that touch real, hard-to-reverse systems — those stay explicit and
+human-approved regardless of review status:
 - Any `terraform apply` (CI only ever runs `plan`)
 - Any action touching the real Oracle Cloud account
 - Any action touching the live Discord bot token or production channels
 
-Surface these explicitly and wait for a go-ahead rather than assuming approval carries over from a prior action.
+Surface those explicitly and wait for a go-ahead rather than assuming approval carries over from a merge.
 
 ## Branch protection
 
