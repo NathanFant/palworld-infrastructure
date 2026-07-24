@@ -30,12 +30,11 @@ assumed to pass. The same standard applies to fixes: after making a change inten
 
 ## Catching problems before they're shipped
 
-Several real bugs in this repo's history were caught by re-reading a diff before pushing, not by review: RCON not
-published in `docker/compose.yml` (would have made the bot unable to reach it at all, being on a separate VM),
-`deploy.sh` chowning files to the wrong user (would have broken backup.sh's ability to read them), and a batch of
-infra changes accidentally committed directly to `main` instead of a feature branch (recovered via a captured
-branch + reset, disclosed transparently rather than silently corrected). The habit worth continuing: read your own
-diff like a skeptical reviewer before it leaves your hands, especially at RCON/SSH/shell boundaries.
+At least one real bug in this repo's history was caught by re-reading a diff before pushing, not by review:
+`deploy.sh` chowning shipped files to the wrong user, which would have broken `backup.sh`'s ability to read them
+(see commit `3710051`, confirmed by PR #36's independent review). The habit worth continuing: read your own diff
+like a skeptical reviewer before it leaves your hands, especially at RCON/SSH/shell boundaries — don't rely on
+review alone to be the first read of security- or correctness-sensitive code.
 
 ## Recurring patterns, once learned, get applied proactively
 
