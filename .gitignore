@@ -1,0 +1,38 @@
+# Secrets / local config — never commit real values
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+!infrastructure/**/*.example.key
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+.terraform.lock.hcl.bak
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Node / discord-bot
+discord-bot/node_modules/
+discord-bot/dist/
+discord-bot/build/
+npm-debug.log*
+
+# Bot runtime state
+discord-bot/data/
+*.sqlite
+*.sqlite3
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log
