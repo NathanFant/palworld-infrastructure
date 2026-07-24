@@ -1,6 +1,7 @@
 import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { config } from "./config.js";
 import { commands } from "./commands/index.js";
+import { registerPresenceWatcher, renderPresence } from "./services/presenceWatcher.js";
 
 // Guilds: baseline, required for basic guild/channel caching to work at all.
 // GuildVoiceStates: needed for the presence watcher (Phase 5) to see voice-channel
@@ -16,6 +17,10 @@ const client = new Client({
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
+  registerPresenceWatcher(readyClient);
+  renderPresence(readyClient).catch((error: unknown) => {
+    console.error("Failed to render initial voice presence:", error);
+  });
 });
 
 client.on(Events.InteractionCreate, (interaction) => {

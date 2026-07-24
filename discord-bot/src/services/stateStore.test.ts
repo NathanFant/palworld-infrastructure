@@ -19,7 +19,12 @@ afterEach(() => {
 describe("stateStore", () => {
   it("returns default state when the file doesn't exist yet", async () => {
     const state = await getState(filePath);
-    expect(state).toEqual({ serverStartedAt: null, statusMessageId: null, lastKnownUp: false });
+    expect(state).toEqual({
+      serverStartedAt: null,
+      statusMessageId: null,
+      voicePresenceMessageId: null,
+      lastKnownUp: false,
+    });
   });
 
   it("throws on corrupt JSON rather than silently resetting", async () => {
@@ -75,6 +80,7 @@ describe("stateStore", () => {
     expect(state).toEqual({
       lastKnownUp: true,
       statusMessageId: "abc",
+      voicePresenceMessageId: null,
       serverStartedAt: "2026-01-01T00:00:00Z",
     });
   });
@@ -95,7 +101,15 @@ describe("stateStore", () => {
 
     // Fix the file, then confirm a subsequent update still goes through rather than
     // being permanently stuck behind the failed one.
-    writeFileSync(badPath, JSON.stringify({ serverStartedAt: null, statusMessageId: null, lastKnownUp: false }));
+    writeFileSync(
+      badPath,
+      JSON.stringify({
+        serverStartedAt: null,
+        statusMessageId: null,
+        voicePresenceMessageId: null,
+        lastKnownUp: false,
+      }),
+    );
     const state = await updateState({ lastKnownUp: true }, badPath);
     expect(state.lastKnownUp).toBe(true);
   });
