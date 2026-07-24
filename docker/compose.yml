@@ -34,7 +34,11 @@ services:
       MULTITHREADING: "true"
 
       # RCON is how the bot controls the server (start/stop broadcast, countdown,
-      # player queries) — required, not optional, for this project.
+      # player queries) — required, not optional, for this project. This image has
+      # no separate RCON credential: RCON auth uses ADMIN_PASSWORD above, not
+      # .env.example's RCON_PASSWORD field. The bot's own RCON client config must be
+      # set to the same value as PALWORLD_ADMIN_PASSWORD, or its connection will
+      # silently fail authentication if the two ever diverge.
       RCON_ENABLED: "true"
       RCON_PORT: ${RCON_PORT:-25575}
 
