@@ -2,6 +2,9 @@ import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { config } from "./config.js";
 import { commands } from "./commands/index.js";
 import { registerPresenceWatcher, renderPresence } from "./services/presenceWatcher.js";
+import { startStatusHeartbeat } from "./services/statusHeartbeat.js";
+
+const STATUS_HEARTBEAT_INTERVAL_MS = 60_000;
 
 // Guilds: baseline, required for basic guild/channel caching to work at all.
 // GuildVoiceStates: needed for the presence watcher (Phase 5) to see voice-channel
@@ -21,6 +24,7 @@ client.once(Events.ClientReady, (readyClient) => {
   renderPresence(readyClient).catch((error: unknown) => {
     console.error("Failed to render initial voice presence:", error);
   });
+  startStatusHeartbeat(readyClient, STATUS_HEARTBEAT_INTERVAL_MS);
 });
 
 client.on(Events.InteractionCreate, (interaction) => {
