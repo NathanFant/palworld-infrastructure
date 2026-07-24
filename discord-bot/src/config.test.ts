@@ -15,8 +15,8 @@ function stubAllRequired() {
   }
 }
 
-// Re-imports config.ts fresh each time -- it validates env vars at import time
-// (fail-fast), so each test needs its own module instance rather than a cached one.
+// Re-imports config.ts fresh each time so each test sees its own stubbed env vars,
+// not a cached module instance from a previous test.
 async function importConfig() {
   vi.resetModules();
   return import("./config.js");
@@ -27,10 +27,15 @@ describe("config", () => {
     vi.unstubAllEnvs();
   });
 
-  it("throws a clear error when a required var is missing", async () => {
+  it("does not throw merely from being imported, even with nothing set", async () => {
+    await expect(importConfig()).resolves.not.toThrow();
+  });
+
+  it("throws a clear error when a required field is actually read and its var is missing", async () => {
     stubAllRequired();
     vi.stubEnv("DISCORD_BOT_TOKEN", "");
-    await expect(importConfig()).rejects.toThrow(/DISCORD_BOT_TOKEN/);
+    const { config } = await importConfig();
+    expect(() => config.discord.token).toThrow(/DISCORD_BOT_TOKEN/);
   });
 
   it("loads successfully when all required vars are set", async () => {

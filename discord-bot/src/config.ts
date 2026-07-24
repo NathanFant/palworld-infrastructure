@@ -27,13 +27,31 @@ function optional(name: string, fallback: string): string {
 }
 
 export const config = {
+  // Getters, not plain properties: validation happens when a field is actually
+  // *read*, not merely when this module is imported. Without this, any unrelated
+  // module importing config.js for e.g. config.lifecycle.stateFilePath would throw
+  // on missing Discord vars it never even touches -- exactly what broke stateStore's
+  // tests in CI (no .env.local there), while passing locally only because a real
+  // .env.local happened to be present.
   discord: {
-    token: required("DISCORD_BOT_TOKEN"),
-    clientId: required("DISCORD_CLIENT_ID"),
-    guildId: required("DISCORD_GUILD_ID"),
-    voiceChannelId: required("DISCORD_VOICE_CHANNEL_ID"),
-    statusChannelId: required("DISCORD_STATUS_CHANNEL_ID"),
-    adminRoleId: required("DISCORD_ADMIN_ROLE_ID"),
+    get token() {
+      return required("DISCORD_BOT_TOKEN");
+    },
+    get clientId() {
+      return required("DISCORD_CLIENT_ID");
+    },
+    get guildId() {
+      return required("DISCORD_GUILD_ID");
+    },
+    get voiceChannelId() {
+      return required("DISCORD_VOICE_CHANNEL_ID");
+    },
+    get statusChannelId() {
+      return required("DISCORD_STATUS_CHANNEL_ID");
+    },
+    get adminRoleId() {
+      return required("DISCORD_ADMIN_ROLE_ID");
+    },
   },
   // Not required at boot: the bot can start and log into Discord before the game VM
   // exists or before .env.local's GAME_VM_HOST/RCON_HOST are filled in. Services that
