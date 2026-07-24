@@ -33,3 +33,15 @@ output "game_nsg_id" {
   description = "Consumed by the bot-VM Terraform ticket to add the cross-NSG RCON ingress rule."
   value       = oci_core_network_security_group.game.id
 }
+
+output "bot_vm_public_ip" {
+  value = oci_core_instance.bot.public_ip
+}
+
+output "bot_vm_private_ip" {
+  value = oci_core_instance.bot.private_ip
+}
+
+output "bot_nsg_id" {
+  value = oci_core_network_security_group.bot.id
+}
