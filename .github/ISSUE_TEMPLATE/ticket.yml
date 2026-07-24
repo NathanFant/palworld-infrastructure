@@ -1,0 +1,33 @@
+name: Ticket
+description: A unit of work for this repo, sized to become a single PR.
+title: "[area]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        See CLAUDE.md and CONTRIBUTING.md for how this ticket becomes a branch, a PR, and an independent review.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this work is needed. What prompted it, what problem it solves.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance Criteria
+      description: A checklist of what "done" means for this ticket.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What this ticket deliberately does not cover (often a pointer to a later ticket).
+    validations:
+      required: false
