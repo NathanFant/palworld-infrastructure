@@ -53,6 +53,7 @@ resource "oci_core_instance" "bot" {
   is_pv_encryption_in_transit_enabled = true
 
   metadata = {
-    user_data = base64encode(file("${path.module}/../cloud-init/bot-vm.yaml"))
+    ssh_authorized_keys = var.admin_ssh_public_key
+    user_data           = base64encode(file("${path.module}/../cloud-init/bot-vm.yaml"))
   }
 }

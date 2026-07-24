@@ -43,3 +43,13 @@ Same Docker install, no forced-command SSH setup (this host isn't the target of
 restricted access — it's the one holding the private key and initiating connections
 outward). Normal admin SSH access applies here, gated by the security list's
 `admin_ssh_cidr` restriction from the networking ticket, same as the game VM.
+
+### Admin SSH access (both VMs)
+
+Separate from the bot's forced-command key above: both `oci_core_instance` resources
+set `metadata.ssh_authorized_keys` to `var.admin_ssh_public_key`, which OCI/cloud-init
+merges into the default `ubuntu` user's `authorized_keys` — a real shell, used by
+`scripts/deploy.sh` and for general debugging. This is only read by cloud-init at
+**first boot** — changing `admin_ssh_public_key` and re-applying against an
+already-launched instance won't take effect; the instance would need to be destroyed
+and recreated to pick up a new key.
