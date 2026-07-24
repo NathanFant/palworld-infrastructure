@@ -1,0 +1,54 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - "infrastructure/**.tf"
+      - "infrastructure/**.tfvars"
+      - ".github/workflows/terraform.yml"
+
+# Read-only by design: this workflow only ever runs `fmt -check`, `validate`, and `plan`.
+# `terraform apply` is never run in CI — it's always a deliberate, human-approved action
+# against real Oracle Cloud resources. See CLAUDE.md / CONTRIBUTING.md.
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infrastructure
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for Terraform config
+        id: has-tf
+        run: |
+          if [ -n "$(find . -name '*.tf' -print -quit)" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Terraform
+        if: steps.has-tf.outputs.present == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Terraform fmt
+        if: steps.has-tf.outputs.present == 'true'
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        if: steps.has-tf.outputs.present == 'true'
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        if: steps.has-tf.outputs.present == 'true'
+        run: terraform validate
+
+      - name: Terraform plan
+        if: steps.has-tf.outputs.present == 'true'
+        run: echo "Plan requires real OCI credentials (GitHub secrets) — wired in the Phase 1 Terraform bootstrap ticket."
