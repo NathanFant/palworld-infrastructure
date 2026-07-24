@@ -48,7 +48,7 @@ variable "admin_ssh_cidr" {
 }
 
 variable "admin_ssh_public_key" {
-  description = "Public half of a dedicated admin keypair, injected into both VMs' default-user authorized_keys via instance metadata. Separate from the OCI API key (Terraform/provider auth) and the bot's forced-command-restricted key (infrastructure/cloud-init) — this one gets a real shell."
+  description = "Public half of a dedicated admin keypair, injected into both VMs' default-user authorized_keys via instance metadata. Separate from the OCI API key (Terraform/provider auth) and the bot's forced-command-restricted key (infrastructure/cloud-init) — this one gets a real shell. Only read by cloud-init at first boot: changing this and re-applying against an already-launched instance has no effect until it's destroyed and recreated."
   type        = string
 }
 
