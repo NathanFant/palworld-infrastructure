@@ -62,12 +62,22 @@ higher-limit tenancy (per the PAYG ambiguity above) is a real, if unconfirmed, p
 outright. Overriding either variable is documented as requiring the operator to actually check their own tenancy's
 limit first, not guess.
 
-**Is 2 OCPU/12GB still enough for this project?** Yes, comfortably, for the 3-person target: Palworld's dedicated
-server is documented (Pocketpair's own guidance) as using at most ~2 CPU cores under load regardless of how many
-more are available, and needing 8GB as a workable-but-crash-prone floor for 4-6 players, 16GB as the general
-recommendation. 12GB sits well above the crash-prone floor and only 4GB under the general recommendation, for a
-group smaller than the 4-6-player range that floor targets. No sizing change to `docker/compose.yml` or the
-Palworld container's own config was needed.
+**Is 2 OCPU/12GB still enough for this project?** Genuinely uncertain, not a confirmed "yes" — worth stating
+precisely rather than overclaiming. Pocketpair's own official requirements
+([docs.palworldgame.com](https://docs.palworldgame.com/getting-started/requirements/)) recommend **4+ CPU cores**
+and **16GB RAM** (32GB for larger setups), with 8GB noted as bootable but crash-prone from out-of-memory. The new
+Always Free allowance (2 OCPU/12GB) is *below* Pocketpair's own recommended minimum on both axes — this is not the
+same claim as "still comfortably sufficient." Separately, community benchmarks (not Pocketpair's own guidance)
+report that Palworld's simulation model is heavily single/dual-thread-bound (per-Pal/per-base logic tends to land
+on one or two cores rather than spreading across all available ones), which is why some hosts report real CPU
+*usage* rarely exceeding ~2 cores in practice for small worlds — but that's an empirical usage pattern from
+third-party sources, not a Pocketpair-endorsed substitute for their stated 4-core recommendation, and shouldn't be
+read as one. On RAM, 12GB sits above the 8GB crash-prone floor and below the 16GB recommendation, for a group of 3
+(smaller than the setups that guidance targets) — a reasonable bet, but still under Pocketpair's own number. No
+sizing change was made to `docker/compose.yml` or the Palworld container's own config. Given this, the real
+verification is empirical: `docs/runbooks/post-allocation-checklist.md` already calls for actually running the
+server with real players once the game VM exists — that's the point this assumption gets tested for real, not this
+document.
 
 **One open question worth flagging:** this repo's `docs/runbooks/capacity-retry.md` has, up to this point,
 attributed every failed `terraform apply` on `oci_core_instance.game` to true regional Ampere A1 capacity
