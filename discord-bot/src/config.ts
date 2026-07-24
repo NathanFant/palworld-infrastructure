@@ -1,0 +1,59 @@
+import { config as loadDotenv } from "dotenv";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+// Single source of truth for env vars is the repo root's .env.local (also read by
+// scripts/deploy.sh and Terraform's tfvars) -- not a separate discord-bot/.env, to
+// avoid two files drifting out of sync. In production (the bot VM's own
+// docker-compose), real environment variables are already set and this load is a
+// no-op if the file doesn't exist there.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+loadDotenv({ path: path.resolve(__dirname, "../../.env.local") });
+
+function required(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+function optional(name: string, fallback: string): string {
+  // An empty string (e.g. `RCON_PORT=` with nothing after the `=` in a .env file)
+  // counts as "not set" here, same as undefined -- `??` alone wouldn't catch this,
+  // since "" is neither null nor undefined, and Number("") is 0, not NaN.
+  const value = process.env[name];
+  return value ? value : fallback;
+}
+
+export const config = {
+  discord: {
+    token: required("DISCORD_BOT_TOKEN"),
+    clientId: required("DISCORD_CLIENT_ID"),
+    guildId: required("DISCORD_GUILD_ID"),
+    voiceChannelId: required("DISCORD_VOICE_CHANNEL_ID"),
+    statusChannelId: required("DISCORD_STATUS_CHANNEL_ID"),
+    adminRoleId: required("DISCORD_ADMIN_ROLE_ID"),
+  },
+  // Not required at boot: the bot can start and log into Discord before the game VM
+  // exists or before .env.local's GAME_VM_HOST/RCON_HOST are filled in. Services that
+  // actually need these (serverControl.ts, rcon.ts) validate at the point of use.
+  gameVm: {
+    host: optional("GAME_VM_HOST", ""),
+    sshPort: Number(optional("GAME_VM_SSH_PORT", "22")),
+    sshUser: optional("GAME_VM_SSH_USER", "palworld-bot"),
+    sshPrivateKeyPath: optional("GAME_VM_SSH_PRIVATE_KEY_PATH", ""),
+  },
+  rcon: {
+    host: optional("RCON_HOST", ""),
+    port: Number(optional("RCON_PORT", "25575")),
+    password: optional("RCON_PASSWORD", ""),
+  },
+  lifecycle: {
+    restartIntervalHours: Number(optional("SERVER_RESTART_INTERVAL_HOURS", "48")),
+    // Resolved against the process's working directory (not this source file's
+    // location) -- in production that's the container's WORKDIR with a mounted
+    // volume; in local dev, wherever `npm run dev` was invoked from.
+    stateFilePath: path.resolve(optional("BOT_STATE_FILE_PATH", "./data/state.json")),
+  },
+} as const;
