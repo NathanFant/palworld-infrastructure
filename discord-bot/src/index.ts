@@ -1,5 +1,6 @@
-import { Client, Events, GatewayIntentBits } from "discord.js";
+import { Client, Events, GatewayIntentBits, MessageFlags } from "discord.js";
 import { config } from "./config.js";
+import { commands } from "./commands/index.js";
 
 // Guilds: baseline, required for basic guild/channel caching to work at all.
 // GuildVoiceStates: needed for the presence watcher (Phase 5) to see voice-channel
@@ -15,6 +16,28 @@ const client = new Client({
 
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
+});
+
+client.on(Events.InteractionCreate, (interaction) => {
+  if (!interaction.isChatInputCommand()) {
+    return;
+  }
+
+  const command = commands.get(interaction.commandName);
+  if (!command) {
+    console.error(`No handler registered for command: ${interaction.commandName}`);
+    return;
+  }
+
+  command.execute(interaction).catch(async (error: unknown) => {
+    console.error(`Error handling /${interaction.commandName}:`, error);
+    const content = "Something went wrong running that command.";
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({ content, flags: MessageFlags.Ephemeral }).catch(() => {});
+    } else {
+      await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => {});
+    }
+  });
 });
 
 client.login(config.discord.token);
