@@ -195,6 +195,70 @@ describe("server command: /server status", () => {
   });
 });
 
+describe("server command: /server restart", () => {
+  it("saves, stops, starts, waits for healthy, and records state", async () => {
+    serverControlStopMock.mockResolvedValue({ ok: true, stdout: "", stderr: "" });
+    serverControlStartMock.mockResolvedValue({ ok: true, stdout: "", stderr: "" });
+    serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: true, state: "running" } });
+    const interaction = createInteraction("restart");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await execute(interaction as any);
+
+    expect(sendRconCommandMock).toHaveBeenCalledWith("Save");
+    expect(serverControlStopMock).toHaveBeenCalled();
+    expect(serverControlStartMock).toHaveBeenCalled();
+    expect(updateStateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ lastKnownUp: true, serverStartedAt: expect.any(String) }),
+    );
+    expect(interaction.editReply).toHaveBeenLastCalledWith(expect.stringContaining("restarted"));
+  });
+
+  it("bails out with a clear message if the stop step fails, and never attempts to start", async () => {
+    serverControlStopMock.mockResolvedValue({ ok: false, stderr: "compose stop error" });
+    const interaction = createInteraction("restart");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await execute(interaction as any);
+
+    expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining("compose stop error"));
+    expect(serverControlStartMock).not.toHaveBeenCalled();
+    expect(updateStateMock).not.toHaveBeenCalled();
+  });
+
+  it("bails out with a clear message if the start step fails after a successful stop", async () => {
+    serverControlStopMock.mockResolvedValue({ ok: true, stdout: "", stderr: "" });
+    serverControlStartMock.mockResolvedValue({ ok: false, error: "connect ETIMEDOUT" });
+    const interaction = createInteraction("restart");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await execute(interaction as any);
+
+    expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining("ETIMEDOUT"));
+    expect(updateStateMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a timeout if the server never comes back up after restarting", async () => {
+    vi.useFakeTimers();
+    try {
+      serverControlStopMock.mockResolvedValue({ ok: true, stdout: "", stderr: "" });
+      serverControlStartMock.mockResolvedValue({ ok: true, stdout: "", stderr: "" });
+      serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
+      const interaction = createInteraction("restart");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const done = execute(interaction as any);
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1_000);
+      await done;
+
+      expect(interaction.editReply).toHaveBeenCalledWith(expect.stringContaining("didn't come up"));
+      expect(updateStateMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 afterEach(() => {
   vi.useRealTimers();
 });
