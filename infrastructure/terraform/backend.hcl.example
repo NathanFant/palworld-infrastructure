@@ -1,0 +1,18 @@
+# Copy to backend.hcl (gitignored) and fill in real values, produced by applying
+# infrastructure/terraform-bootstrap once. Used as:
+#   terraform init -backend-config=backend.hcl
+#
+# Also requires AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars set to the OCI
+# Customer Secret Key pair that infrastructure/terraform-bootstrap creates — this is
+# a *different* credential from the tenancy/user OCID + API key used by the oci
+# provider itself (see provider.tf).
+
+bucket                      = "palworld-tfstate"
+key                         = "palworld-infrastructure/terraform.tfstate"
+region                      = "us-ashburn-1"
+endpoint                    = "https://<namespace>.compat.objectstorage.us-ashburn-1.oraclecloud.com"
+skip_region_validation      = true
+skip_credentials_validation = true
+skip_metadata_api_check     = true
+skip_requesting_account_id  = true
+force_path_style            = true
