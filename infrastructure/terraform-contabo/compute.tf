@@ -20,11 +20,12 @@ resource "contabo_instance" "game" {
   # OCI, Contabo bundles storage into the instance itself (see
   # docs/decisions/006-migrate-to-contabo.md). World-save data lives in a plain
   # directory on the main disk (see game-vm-contabo.yaml), not a mounted device.
+  # Only the two secret values need to reach cloud-init -- namespace/bucket/region
+  # are plain config, not secrets, and already flow to the VM the same way every
+  # other non-secret Palworld setting does (scripts/deploy.sh renders them into
+  # /opt/palworld/.env, which backup.sh/restore.sh read directly at runtime).
   user_data = templatefile("${path.module}/../cloud-init/game-vm-contabo.yaml", {
     palworld_bot_ssh_public_key = var.palworld_bot_ssh_public_key
-    oracle_backup_namespace     = var.oracle_backup_namespace
-    oracle_backup_bucket_name   = var.oracle_backup_bucket_name
-    oracle_backup_region        = var.oracle_backup_region
     oracle_backup_access_key    = var.oracle_backup_access_key
     oracle_backup_secret_key    = var.oracle_backup_secret_key
   })

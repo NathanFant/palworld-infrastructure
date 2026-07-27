@@ -75,32 +75,21 @@ variable "rcon_port" {
 }
 
 # --- Backups (Oracle Object Storage, unchanged by this migration -- see
-# docs/decisions/006-migrate-to-contabo.md for why storage/state stay on Oracle) ---
-
-variable "oracle_backup_namespace" {
-  description = "Oracle Object Storage namespace the backup bucket lives in (same value as infrastructure/terraform's data.oci_objectstorage_namespace.ns output)."
-  type        = string
-}
-
-variable "oracle_backup_bucket_name" {
-  description = "Oracle Object Storage bucket name for world-save backups. Matches infrastructure/terraform's backup_bucket_name / .env.example's OCI_BACKUP_BUCKET_NAME."
-  type        = string
-  default     = "palworld-backups"
-}
-
-variable "oracle_backup_region" {
-  description = "OCI region the backup bucket lives in, used to construct the S3-compatible endpoint URL (https://<namespace>.compat.objectstorage.<region>.oraclecloud.com)."
-  type        = string
-}
+# docs/decisions/006-migrate-to-contabo.md for why storage/state stay on Oracle).
+# Only the secret credential itself needs to reach this config/cloud-init -- the
+# namespace/bucket/region are plain config, not secrets, and already flow to the VM
+# via scripts/deploy.sh's normal .env render (OCI_BACKUP_NAMESPACE/
+# OCI_BACKUP_BUCKET_NAME/OCI_BACKUP_REGION in .env.local), which backup.sh/restore.sh
+# read directly at runtime -- no need to duplicate them through Terraform too. ---
 
 variable "oracle_backup_access_key" {
-  description = "Access key half of an OCI Customer Secret Key (Identity -> Users -> your user -> Customer Secret Keys -> Generate Secret Key), scoped to this backup bucket. Replaces the Oracle-VM-only instance-principal auth mechanism, which cannot work once compute is no longer an Oracle instance."
+  description = "Access key half of a dedicated, least-privileged OCI Customer Secret Key scoped to only the backup bucket -- infrastructure/terraform/backup-service-account.tf's oci_identity_customer_secret_key.backup_service resource, read via `terraform output backup_service_access_key` in that directory. Deliberately NOT a key belonging to the general admin/Terraform user: a Customer Secret Key inherits its user's full permissions, so putting one on a public-facing VM demands its own single-purpose user (see that file's comment for the full reasoning)."
   type        = string
   sensitive   = true
 }
 
 variable "oracle_backup_secret_key" {
-  description = "Secret key half of the same OCI Customer Secret Key as oracle_backup_access_key. Shown only once at generation time in the OCI console -- save it then, it can't be retrieved again later."
+  description = "Secret key half of the same Customer Secret Key as oracle_backup_access_key -- read via `terraform output -raw backup_service_secret_key` in infrastructure/terraform. Only ever returned once, by OCI itself, in that resource's create response; Terraform state is what retains it, same as every other real secret already tracked there."
   type        = string
   sensitive   = true
 }

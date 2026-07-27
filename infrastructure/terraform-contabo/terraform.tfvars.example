@@ -31,12 +31,15 @@ palworld_bot_ssh_public_key = "ssh-ed25519 AAAA...REPLACE_WITH_REAL_PUBLIC_KEY..
 # (see variables.tf) — only override if you need something non-standard.
 
 # --- Backups/state stay on Oracle Object Storage -- see
-# docs/decisions/006-migrate-to-contabo.md ---
-oracle_backup_namespace   = "<same namespace as infrastructure/terraform/terraform.tfvars>"
-oracle_backup_bucket_name = "palworld-backups"
-oracle_backup_region      = "us-chicago-1"
-
-# Generate via OCI Console: Identity -> Users -> your user -> Customer Secret Keys ->
-# Generate Secret Key. Shown only once at generation time -- save it then.
+# docs/decisions/006-migrate-to-contabo.md. Only the secret credential itself needs
+# to be set here -- namespace/bucket/region are plain config that already flow to
+# the VM via scripts/deploy.sh's normal .env render, not through Terraform. ---
+#
+# A dedicated, least-privileged OCI user/Customer Secret Key, scoped to only the
+# backup bucket -- see infrastructure/terraform/backup-service-account.tf. Get these
+# via `terraform output backup_service_access_key` / `terraform output -raw
+# backup_service_secret_key` in that directory, once applied. Deliberately NOT a key
+# belonging to the general admin/Terraform user (a Customer Secret Key inherits its
+# user's full permissions).
 oracle_backup_access_key = "REPLACE_WITH_REAL_ACCESS_KEY"
 oracle_backup_secret_key = "REPLACE_WITH_REAL_SECRET_KEY"
