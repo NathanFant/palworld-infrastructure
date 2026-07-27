@@ -34,6 +34,7 @@ RCON_PORT="$(env_get RCON_PORT)"
 RCON_PASSWORD="$(env_get PALWORLD_ADMIN_PASSWORD)"
 BUCKET="$(env_get OCI_BACKUP_BUCKET_NAME)"
 NAMESPACE="$(env_get OCI_BACKUP_NAMESPACE)"
+REGION="$(env_get OCI_BACKUP_REGION)"
 
 WORLD_DATA_DIR=/mnt/palworld-data
 TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -53,11 +54,16 @@ fi
 
 tar -czf "${ARCHIVE}" -C "${WORLD_DATA_DIR}" Pal/Saved/SaveGames
 
-oci --auth instance_principal os object put \
-  --bucket-name "${BUCKET}" \
-  --namespace "${NAMESPACE}" \
-  --file "${ARCHIVE}" \
-  --name "${TIER}/palworld-${TIMESTAMP}.tar.gz" \
-  --no-multipart
+# Static Customer Secret Key auth (the "oci-backup" profile in this user's own
+# ~/.aws/credentials, provisioned by cloud-init) against Object Storage's
+# S3-compatible endpoint -- replaces the Oracle-only instance_principal auth the
+# game VM previously used, which only works when the caller genuinely IS an Oracle
+# Cloud instance (see docs/decisions/006-migrate-to-contabo.md).
+aws --profile oci-backup \
+  --endpoint-url "https://${NAMESPACE}.compat.objectstorage.${REGION}.oraclecloud.com" \
+  s3api put-object \
+  --bucket "${BUCKET}" \
+  --key "${TIER}/palworld-${TIMESTAMP}.tar.gz" \
+  --body "${ARCHIVE}"
 
 echo "Uploaded ${TIER}/palworld-${TIMESTAMP}.tar.gz"

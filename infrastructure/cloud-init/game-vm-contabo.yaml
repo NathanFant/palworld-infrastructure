@@ -1,0 +1,212 @@
+#cloud-config
+# User-data for the Contabo "Cloud VPS 6" game VM -- see
+# docs/decisions/006-migrate-to-contabo.md for why compute moved here from Oracle
+# (ARM64/box64 emulation overhead the actual root cause, not the game/save data).
+# Adapted from infrastructure/cloud-init/game-vm.yaml (the still-live Oracle
+# deployment during the migration window); differences from that file are called out
+# inline below. Rendered via Terraform's templatefile() in
+# infrastructure/terraform-contabo/compute.tf, which supplies the bot's SSH public
+# key and the Oracle Object Storage backup credential values (backups/state
+# deliberately stay on Oracle Object Storage even though compute moved here).
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - fail2ban
+  - unattended-upgrades
+  # build-essential + git: building mcrcon from source (backup.sh's RCON client).
+  - build-essential
+  - git
+  # aws-cli: backup.sh/restore.sh now authenticate to Oracle Object Storage via a
+  # static Customer Secret Key against its S3-compatible endpoint, since the
+  # instance-principal auth the Oracle deployment used only works for an actual
+  # Oracle VM (see infrastructure/terraform-contabo/variables.tf's
+  # oracle_backup_access_key/oracle_backup_secret_key).
+  - awscli
+
+users:
+  - default
+  - name: palworld-bot
+    gecos: "Restricted control account for the Discord bot's SSH access"
+    groups: [docker]
+    shell: /bin/bash
+    lock_passwd: true
+    # command= restricts this key to ONLY run palworld-ctl, with whatever subcommand
+    # the bot sent, no interactive shell -- identical security pattern to the Oracle
+    # deployment, see infrastructure/cloud-init/README.md for the full rationale.
+    ssh_authorized_keys:
+      - 'command="/usr/local/bin/palworld-ctl $SSH_ORIGINAL_COMMAND",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ${palworld_bot_ssh_public_key}'
+  - name: bot
+    gecos: "Runs the Discord bot container"
+    groups: [docker]
+    shell: /bin/bash
+    lock_passwd: true
+
+write_files:
+  - path: /usr/local/bin/palworld-ctl
+    permissions: "0755"
+    owner: root:root
+    content: |
+      #!/usr/bin/env bash
+      # Forced-command target for the bot's SSH key -- see cloud-init/README.md.
+      # Only ever invoked as: ssh palworld-bot@game-vm {start|stop|status}
+      # $SSH_ORIGINAL_COMMAND is untrusted input from the SSH client; treat it as such.
+      set -euo pipefail
+
+      COMPOSE_FILE="/opt/palworld/docker-compose.yml"
+      COMPOSE="docker compose -f $${COMPOSE_FILE}"
+
+      case "$${1:-}" in
+        start)
+          exec $${COMPOSE} up -d
+          ;;
+        stop)
+          exec $${COMPOSE} down
+          ;;
+        status)
+          exec $${COMPOSE} ps --format json
+          ;;
+        *)
+          echo "usage: palworld-ctl {start|stop|status}" >&2
+          exit 64
+          ;;
+      esac
+
+  # Static Customer Secret Key credential for Oracle Object Storage's S3-compatible
+  # endpoint -- backup.sh/restore.sh use this (via `aws --profile oci-backup`)
+  # instead of the Oracle-only instance-principal auth the game VM used there. Owned
+  # by palworld-bot (the user backup.sh/restore.sh run as), 0600 -- same protection
+  # level as any other credential file on this host.
+  - path: /home/palworld-bot/.aws/credentials
+    permissions: "0600"
+    owner: palworld-bot:palworld-bot
+    content: |
+      [oci-backup]
+      aws_access_key_id = ${oracle_backup_access_key}
+      aws_secret_access_key = ${oracle_backup_secret_key}
+
+  - path: /etc/systemd/system/palworld-backup@.service
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Palworld backup (%i)
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      User=palworld-bot
+      ExecStart=/opt/palworld/backup.sh %i
+
+  - path: /etc/systemd/system/palworld-backup-hourly.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Hourly Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@hourly.service
+      OnCalendar=hourly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/palworld-backup-daily.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Daily Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@daily.service
+      OnCalendar=daily
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/palworld-backup-weekly.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Weekly Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@weekly.service
+      OnCalendar=weekly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+  - path: /etc/systemd/system/palworld-backup-monthly.timer
+    permissions: "0644"
+    owner: root:root
+    content: |
+      [Unit]
+      Description=Monthly Palworld backup
+
+      [Timer]
+      Unit=palworld-backup@monthly.service
+      OnCalendar=monthly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  # --- Docker Engine + Compose plugin, from Docker's official apt repo ---
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - >
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc]
+    https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable"
+    | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update -y
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+  # --- fail2ban / unattended-upgrades: install already covers defaults; just enable ---
+  - systemctl enable --now fail2ban
+  - dpkg-reconfigure -f noninteractive unattended-upgrades
+
+  # --- World-save directory ---
+  # No separate block-volume/device to format and mount here -- unlike OCI, Contabo
+  # bundles all storage into the instance itself. Plain directory on the main disk.
+  - mkdir -p /mnt/palworld-data
+
+  # --- Palworld deploy target directory (compose file itself deployed separately) ---
+  - mkdir -p /opt/palworld
+  - chown palworld-bot:docker /opt/palworld /mnt/palworld-data
+
+  # --- Discord bot deploy target + persistent state directory ---
+  - mkdir -p /opt/palworld-bot /opt/palworld-bot/data
+  - chown bot:docker /opt/palworld-bot /opt/palworld-bot/data
+
+  # --- mcrcon: RCON client backup.sh uses to trigger a Save before snapshotting ---
+  - >
+    test -x /usr/local/bin/mcrcon ||
+    (git clone --depth 1 https://github.com/Tiiffi/mcrcon.git /tmp/mcrcon &&
+    make -C /tmp/mcrcon &&
+    install -m 0755 /tmp/mcrcon/mcrcon /usr/local/bin/mcrcon &&
+    rm -rf /tmp/mcrcon)
+
+  # --- Backup timers ---
+  # backup.sh/restore.sh themselves are deployed separately by scripts/deploy.sh, not
+  # by cloud-init -- these timers will fail (and self-heal once deployed) if a timer
+  # fires before the first deploy.sh run, which is expected.
+  - systemctl daemon-reload
+  - >
+    systemctl enable --now
+    palworld-backup-hourly.timer
+    palworld-backup-daily.timer
+    palworld-backup-weekly.timer
+    palworld-backup-monthly.timer

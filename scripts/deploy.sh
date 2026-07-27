@@ -55,6 +55,7 @@ chmod 600 "${RENDERED_ENV}"
   echo "RCON_PORT=$(env_get RCON_PORT)"
   echo "OCI_BACKUP_BUCKET_NAME=$(env_get OCI_BACKUP_BUCKET_NAME)"
   echo "OCI_BACKUP_NAMESPACE=$(env_get OCI_BACKUP_NAMESPACE)"
+  echo "OCI_BACKUP_REGION=$(env_get OCI_BACKUP_REGION)"
 } > "${RENDERED_ENV}"
 
 echo "Ensuring /opt/palworld exists on ${GAME_VM_HOST}..."
