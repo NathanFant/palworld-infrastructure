@@ -27,10 +27,13 @@ services:
       PORT: ${PALWORLD_PUBLIC_PORT:-8211}
       PLAYERS: ${PALWORLD_MAX_PLAYERS}
 
-      # Private friend-group server, not listed publicly — keeps the query port
-      # (used for community-server-list discovery) closed; only the game port
-      # itself needs to be reachable (see infrastructure/terraform/network.tf).
-      COMMUNITY: "false"
+      # Listed in Palworld's in-game community server browser, gated by
+      # SERVER_PASSWORD above (per thijsvanloef/palworld-server-docker's own
+      # guidance: use COMMUNITY with a password set). Requires the query port
+      # below to be open in addition to the main game port (see
+      # infrastructure/terraform/network.tf's palworld_query_port rule).
+      COMMUNITY: "true"
+      QUERY_PORT: ${PALWORLD_QUERY_PORT:-27015}
       MULTITHREADING: "true"
 
       # RCON is how the bot controls the server (start/stop broadcast, countdown,
@@ -51,6 +54,8 @@ services:
       UPDATE_ON_BOOT: "true"
     ports:
       - "${PALWORLD_PUBLIC_PORT:-8211}:${PALWORLD_PUBLIC_PORT:-8211}/udp"
+      # Community server list query port -- only needed while COMMUNITY=true above.
+      - "${PALWORLD_QUERY_PORT:-27015}:${PALWORLD_QUERY_PORT:-27015}/udp"
       # RCON is bound to loopback only (127.0.0.1), not 0.0.0.0 -- the Discord bot
       # runs as a second container on this same VM (network_mode: host, see
       # discord-bot/docker-compose.yml) and reaches this port over the host's own

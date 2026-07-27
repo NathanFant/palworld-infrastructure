@@ -65,6 +65,17 @@ resource "oci_core_security_list" "main" {
     }
   }
 
+  ingress_security_rules {
+    protocol    = "17" # UDP
+    source      = "0.0.0.0/0"
+    description = "Palworld community server list query port (COMMUNITY=true in docker/compose.yml)"
+
+    udp_options {
+      min = var.palworld_query_port
+      max = var.palworld_query_port
+    }
+  }
+
   egress_security_rules {
     protocol    = "all"
     destination = "0.0.0.0/0"
