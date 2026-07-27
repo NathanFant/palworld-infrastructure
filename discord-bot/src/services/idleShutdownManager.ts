@@ -63,7 +63,7 @@ async function runIdleCheckOnce(client: Client<true>): Promise<void> {
 
   // Same fields handleStop() sets for a manual /server stop, plus clearing the
   // idle timer -- there's nothing left to be idle about once it's actually stopped.
-  await updateState({ lastKnownUp: false, restartTriggeredAt: null, idleSince: null });
+  await updateState({ restartTriggeredAt: null, idleSince: null });
   await announce(client, `🔴 Stopped the Palworld server automatically after ${idleMinutes} minutes with no players.`);
 }
 

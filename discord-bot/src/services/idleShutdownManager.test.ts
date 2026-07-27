@@ -132,7 +132,7 @@ describe("runIdleCheck", () => {
 
     expect(sendRconCommandMock).toHaveBeenCalledWith("Save");
     expect(serverControlStopMock).toHaveBeenCalled();
-    expect(updateStateMock).toHaveBeenCalledWith({ lastKnownUp: false, restartTriggeredAt: null, idleSince: null });
+    expect(updateStateMock).toHaveBeenCalledWith({ restartTriggeredAt: null, idleSince: null });
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("15 minutes"));
   });
 

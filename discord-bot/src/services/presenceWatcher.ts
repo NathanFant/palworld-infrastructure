@@ -142,7 +142,6 @@ async function maybeAutoStartOnce(client: Client<true>): Promise<void> {
 
   await updateState({
     serverStartedAt: new Date().toISOString(),
-    lastKnownUp: true,
     restartTriggeredAt: null,
     idleSince: null,
   });

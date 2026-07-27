@@ -23,7 +23,6 @@ describe("stateStore", () => {
       serverStartedAt: null,
       statusMessageId: null,
       voicePresenceMessageId: null,
-      lastKnownUp: false,
       restartTriggeredAt: null,
       idleSince: null,
     });
@@ -40,18 +39,18 @@ describe("stateStore", () => {
   });
 
   it("updateState merges a partial update and persists it", async () => {
-    await updateState({ lastKnownUp: true }, filePath);
+    await updateState({ restartTriggeredAt: "2026-01-01T00:00:00Z" }, filePath);
     const state = await getState(filePath);
-    expect(state.lastKnownUp).toBe(true);
+    expect(state.restartTriggeredAt).toBe("2026-01-01T00:00:00Z");
     expect(state.serverStartedAt).toBeNull();
   });
 
   it("preserves existing fields across successive partial updates", async () => {
     await updateState({ serverStartedAt: "2026-01-01T00:00:00Z" }, filePath);
-    await updateState({ lastKnownUp: true }, filePath);
+    await updateState({ restartTriggeredAt: "2026-01-02T00:00:00Z" }, filePath);
     const state = await getState(filePath);
     expect(state.serverStartedAt).toBe("2026-01-01T00:00:00Z");
-    expect(state.lastKnownUp).toBe(true);
+    expect(state.restartTriggeredAt).toBe("2026-01-02T00:00:00Z");
   });
 
   it("writes atomically -- no leftover temp file after a successful write", async () => {
@@ -61,9 +60,9 @@ describe("stateStore", () => {
 
   it("creates the parent directory if it doesn't exist yet", async () => {
     const nestedPath = path.join(dir, "nested", "state.json");
-    await updateState({ lastKnownUp: true }, nestedPath);
+    await updateState({ restartTriggeredAt: "2026-01-01T00:00:00Z" }, nestedPath);
     const raw = readFileSync(nestedPath, "utf8");
-    expect(JSON.parse(raw).lastKnownUp).toBe(true);
+    expect(JSON.parse(raw).restartTriggeredAt).toBe("2026-01-01T00:00:00Z");
   });
 
   it("serializes concurrent updateState calls without losing any of their updates", async () => {
@@ -73,25 +72,24 @@ describe("stateStore", () => {
     // and races to write, and whichever rename finishes last wins outright,
     // silently discarding the others' updates.
     await Promise.all([
-      updateState({ lastKnownUp: true }, filePath),
+      updateState({ restartTriggeredAt: "2026-01-01T00:00:00Z" }, filePath),
       updateState({ statusMessageId: "abc" }, filePath),
-      updateState({ serverStartedAt: "2026-01-01T00:00:00Z" }, filePath),
+      updateState({ serverStartedAt: "2026-01-02T00:00:00Z" }, filePath),
     ]);
 
     const state = await getState(filePath);
     expect(state).toEqual({
-      lastKnownUp: true,
+      restartTriggeredAt: "2026-01-01T00:00:00Z",
       statusMessageId: "abc",
       voicePresenceMessageId: null,
-      serverStartedAt: "2026-01-01T00:00:00Z",
-      restartTriggeredAt: null,
+      serverStartedAt: "2026-01-02T00:00:00Z",
       idleSince: null,
     });
   });
 
   it("leaves no leftover temp files after a batch of concurrent writes", async () => {
     await Promise.all([
-      updateState({ lastKnownUp: true }, filePath),
+      updateState({ restartTriggeredAt: "2026-01-01T00:00:00Z" }, filePath),
       updateState({ statusMessageId: "abc" }, filePath),
     ]);
     expect(readdirSync(dir)).toEqual(["state.json"]);
@@ -101,7 +99,9 @@ describe("stateStore", () => {
     const badPath = path.join(dir, "state.json");
     writeFileSync(badPath, "{not valid json", "utf8"); // getState() will throw on this
 
-    await expect(updateState({ lastKnownUp: true }, badPath)).rejects.toThrow(/invalid JSON/);
+    await expect(updateState({ restartTriggeredAt: "2026-01-01T00:00:00Z" }, badPath)).rejects.toThrow(
+      /invalid JSON/,
+    );
 
     // Fix the file, then confirm a subsequent update still goes through rather than
     // being permanently stuck behind the failed one.
@@ -111,12 +111,11 @@ describe("stateStore", () => {
         serverStartedAt: null,
         statusMessageId: null,
         voicePresenceMessageId: null,
-        lastKnownUp: false,
         restartTriggeredAt: null,
         idleSince: null,
       }),
     );
-    const state = await updateState({ lastKnownUp: true }, badPath);
-    expect(state.lastKnownUp).toBe(true);
+    const state = await updateState({ restartTriggeredAt: "2026-01-01T00:00:00Z" }, badPath);
+    expect(state.restartTriggeredAt).toBe("2026-01-01T00:00:00Z");
   });
 });
