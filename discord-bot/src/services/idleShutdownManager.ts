@@ -83,6 +83,13 @@ async function runIdleCheckOnce(client: Client<true>): Promise<void> {
 // own queues -- an overlapping tick (e.g. a slow RCON/SSH call outliving the check
 // interval) could otherwise read the same stale idleSince twice and either
 // double-trigger the stop or race on clearing/setting the idle timer.
+//
+// This queue is deliberately separate from presenceWatcher.ts's own autoStartQueue
+// (no shared lock between the two): a voice join landing at nearly the same moment
+// the idle threshold is crossed could in theory have maybeAutoStart see "already
+// running" while this check proceeds to stop it moments later. Narrow window,
+// self-resolving on the next qualifying voice-channel transition -- not worth a
+// cross-module lock for a 3-person server.
 let idleQueue: Promise<unknown> = Promise.resolve();
 
 export function runIdleCheck(client: Client<true>): Promise<void> {

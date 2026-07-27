@@ -68,9 +68,15 @@ async function handleStart(interaction: ChatInputCommandInteraction): Promise<vo
     return;
   }
 
-  // restartTriggeredAt cleared here too: a manual start always means a fresh clock,
-  // regardless of whether the lifecycle manager had a restart countdown pending.
-  await updateState({ serverStartedAt: new Date().toISOString(), lastKnownUp: true, restartTriggeredAt: null });
+  // restartTriggeredAt/idleSince cleared here too: a manual start always means a
+  // fresh clock, regardless of any lifecycle-manager restart countdown or
+  // idle-shutdown timer that happened to be pending from a previous session.
+  await updateState({
+    serverStartedAt: new Date().toISOString(),
+    lastKnownUp: true,
+    restartTriggeredAt: null,
+    idleSince: null,
+  });
   await interaction.editReply("The Palworld server is online.");
 }
 
@@ -85,9 +91,10 @@ async function handleStop(interaction: ChatInputCommandInteraction): Promise<voi
     return;
   }
 
-  // A manual stop cancels any lifecycle-manager restart countdown that might have
-  // been pending -- there's nothing left to restart.
-  await updateState({ lastKnownUp: false, restartTriggeredAt: null });
+  // A manual stop cancels any lifecycle-manager restart countdown, and any
+  // idle-shutdown timer, that might have been pending -- there's nothing left to
+  // restart or to be idle about.
+  await updateState({ lastKnownUp: false, restartTriggeredAt: null, idleSince: null });
   await interaction.editReply("The Palworld server has been stopped.");
 }
 
@@ -132,7 +139,12 @@ async function handleRestart(interaction: ChatInputCommandInteraction): Promise<
     return;
   }
 
-  await updateState({ serverStartedAt: new Date().toISOString(), lastKnownUp: true, restartTriggeredAt: null });
+  await updateState({
+    serverStartedAt: new Date().toISOString(),
+    lastKnownUp: true,
+    restartTriggeredAt: null,
+    idleSince: null,
+  });
   await interaction.editReply("The Palworld server has been restarted and is online.");
 }
 
