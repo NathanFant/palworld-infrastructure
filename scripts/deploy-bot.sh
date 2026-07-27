@@ -91,6 +91,12 @@ chmod 600 "${RENDERED_ENV}"
   echo "RCON_HOST=127.0.0.1"
   echo "RCON_PORT=$(env_get RCON_PORT)"
   echo "RCON_PASSWORD=$(env_get RCON_PASSWORD)"
+  # Unlike GAME_VM_HOST/RCON_HOST above, this is deliberately the real public IP, not
+  # 127.0.0.1 -- it's what the status heartbeat tells *players* to connect to, not
+  # where the bot itself reaches anything. Same value DEPLOY_HOST above already uses.
+  echo "PALWORLD_PUBLIC_HOST=${DEPLOY_HOST}"
+  echo "PALWORLD_PUBLIC_PORT=$(env_get PALWORLD_PUBLIC_PORT)"
+  echo "PALWORLD_SERVER_PASSWORD=$(env_get PALWORLD_SERVER_PASSWORD)"
   echo "SERVER_RESTART_INTERVAL_HOURS=$(env_get SERVER_RESTART_INTERVAL_HOURS)"
   # Same reasoning again -- always the fixed in-container path the compose file's
   # ./data:/app/data mount resolves to.

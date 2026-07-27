@@ -94,6 +94,19 @@ describe("serverControl", () => {
     expect(result).toEqual({ ok: true, status: { running: true, state: "running" } });
   });
 
+  it("status() includes the Health field when the container is still starting", async () => {
+    connectMock.mockResolvedValue(undefined);
+    execCommandMock.mockResolvedValue({
+      code: 0,
+      stdout: JSON.stringify({ Name: "palworld", State: "running", Health: "starting" }),
+      stderr: "",
+    });
+
+    const result = await serverControl.status();
+
+    expect(result).toEqual({ ok: true, status: { running: true, state: "running", health: "starting" } });
+  });
+
   it("status() reports not running when docker compose ps returns nothing (container absent)", async () => {
     connectMock.mockResolvedValue(undefined);
     execCommandMock.mockResolvedValue({ code: 0, stdout: "", stderr: "" });
