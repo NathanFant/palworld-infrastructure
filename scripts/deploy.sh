@@ -81,6 +81,10 @@ ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" '
 '
 
 echo "Pulling latest image..."
-ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "cd /opt/palworld && docker compose pull"
+# As palworld-bot, not the admin user running this script -- .env is 0600 owned by
+# palworld-bot, and `docker compose` always tries to load it from the working
+# directory even for `pull`, so running this as the admin user fails with a
+# permission error on that file.
+ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "cd /opt/palworld && sudo -u palworld-bot docker compose pull"
 
 echo "Deployed. Use the Discord bot's /server start (or palworld-ctl start over SSH as the bot user) to run it."
