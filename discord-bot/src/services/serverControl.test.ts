@@ -20,7 +20,10 @@ vi.mock("node-ssh", () => ({
 vi.mock("../config.js", () => ({
   config: {
     gameVm: {
-      host: "10.0.1.5",
+      // 127.0.0.1, not a distinct remote host -- the bot reaches the game server
+      // over loopback (see docs/decisions/005-consolidate-bot-onto-game-vm.md);
+      // this code path is host-agnostic either way, only the fixture value changed.
+      host: "127.0.0.1",
       sshPort: 22,
       sshUser: "palworld-bot",
       sshPrivateKeyPath: "/fake/key",

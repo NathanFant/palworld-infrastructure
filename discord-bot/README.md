@@ -28,10 +28,13 @@ validate at the point of use, not at boot.
 ## Deployment
 
 Built via the multi-stage `Dockerfile` (compile stage, then a slim runtime image with
-only production dependencies) and deployed to the bot VM's own `docker compose`
-setup (`docker-compose.yml` in this directory) — separate from the game VM entirely,
-so the bot stays reachable even when the Palworld container is fully stopped (see
-`CLAUDE.md`'s architecture decisions).
+only production dependencies) and deployed to its own `docker compose` project
+(`docker-compose.yml` in this directory) on the same game VM the Palworld server runs
+on (see [`docs/decisions/005-consolidate-bot-onto-game-vm.md`](../docs/decisions/005-consolidate-bot-onto-game-vm.md)
+for why there's no separate bot VM) — a distinct container from the Palworld one, so
+the bot stays reachable even when the Palworld container is fully stopped (see
+`CLAUDE.md`'s architecture decisions). It runs with `network_mode: host` and reaches
+the game server over `127.0.0.1`, not a second host's IP.
 
 - **Image publishing** (`.github/workflows/bot-cd.yml`'s `publish` job) is automatic:
   every merge to `main` touching `discord-bot/**` re-verifies (lint/typecheck/test/
@@ -39,12 +42,12 @@ so the bot stays reachable even when the Palworld container is fully stopped (se
   with both the commit SHA and `latest`.
 - **First-time / credential-rotation deploys** use `scripts/deploy-bot.sh`, run
   manually — it's the one place the live Discord bot token and the game VM's SSH
-  private key get shipped to the bot VM, deliberately kept out of GitHub Actions
-  entirely (see `CLAUDE.md`'s stance on the live bot token staying a human-approved
-  action).
+  private key get shipped to the deploy target, deliberately kept out of GitHub
+  Actions entirely (see `CLAUDE.md`'s stance on the live bot token staying a
+  human-approved action).
 - **Subsequent rollouts** (after `deploy-bot.sh` has run once) use the same
   workflow's `deploy` job, triggered manually via `workflow_dispatch` ("Run
   workflow" in the Actions UI) — never automatically on merge. It only needs SSH
-  access (repo Variables `BOT_VM_HOST`/`BOT_VM_SSH_USER`, and Secret
-  `BOT_VM_SSH_PRIVATE_KEY`) to pull the new image and recreate the container; it
+  access (repo Variables `DEPLOY_VM_HOST`/`DEPLOY_VM_SSH_USER`, and Secret
+  `DEPLOY_VM_SSH_PRIVATE_KEY`) to pull the new image and recreate the container; it
   never touches the bot's own secrets.

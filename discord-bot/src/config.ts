@@ -4,9 +4,9 @@ import path from "node:path";
 
 // Single source of truth for env vars is the repo root's .env.local (also read by
 // scripts/deploy.sh and Terraform's tfvars) -- not a separate discord-bot/.env, to
-// avoid two files drifting out of sync. In production (the bot VM's own
-// docker-compose), real environment variables are already set and this load is a
-// no-op if the file doesn't exist there.
+// avoid two files drifting out of sync. In production (the bot's own docker-compose
+// project on the game VM), real environment variables are already set and this load
+// is a no-op if the file doesn't exist there.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 loadDotenv({ path: path.resolve(__dirname, "../../.env.local") });
 
