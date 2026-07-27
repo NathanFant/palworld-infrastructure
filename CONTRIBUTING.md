@@ -35,7 +35,10 @@ context on it — a genuine second opinion, not the author checking their own wo
 - Checks correctness against the linked ticket's acceptance criteria
 - Scrutinizes every RCON/SSH/shell command boundary for injection risk and least-privilege
 - Confirms no secrets/credentials were committed
-- Leaves a real review (approve, or request changes with specifics)
+- Leaves a real review: a plain comment stating its verdict with specifics, not GitHub's native approve/request-changes
+  actions — this repo's GitHub setup can't self-approve a PR (the same account is both author and reviewer), so a
+  plainly-worded verdict comment is the actual mechanism, not a placeholder for one (see
+  [`docs/claude-workflow.md`](docs/claude-workflow.md) for the full reasoning)
 
 Label the PR `needs-review` while this is pending.
 
@@ -46,9 +49,9 @@ acknowledgment is enough for small follow-ups (typos, wording).
 
 ## 6. Merge
 
-**Merge as soon as the independent review comes back clean** — approved outright, or approved after requested
-changes were made and the reviewer confirmed the fix. No separate merge sign-off is needed on top of that; the
-review *is* the gate. If a review requests changes, address them, get the reviewer's explicit confirmation that
+**Merge as soon as the independent review comes back clean** — its verdict comment says so outright, or says so
+after requested changes were made and the reviewer confirmed the fix. No separate merge sign-off is needed on top
+of that; the review *is* the gate. If a review requests changes, address them, get the reviewer's explicit confirmation that
 the fix resolves their findings, then merge — don't merge on your own judgment that a fix "should" be sufficient.
 
 This does **not** extend to actions that touch real, hard-to-reverse systems — those stay explicit and
