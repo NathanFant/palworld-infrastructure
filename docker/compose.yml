@@ -51,6 +51,15 @@ services:
       # unmanaged set of local backups on the same disk indefinitely.
       BACKUP_ENABLED: "false"
 
+      # Disables scripted invader/raid enemy waves (bEnableInvaderEnemy) -- a
+      # documented, community-recommended memory mitigation for Palworld dedicated
+      # servers (raids repeatedly spawn enemy waves that add to the live object
+      # count). Wild Pal encounters and all other gameplay are unaffected -- this
+      # only disables raid events, not normal spawns. Applied after live
+      # investigation found the server hitting severe memory/swap pressure
+      # independent of player count (see issue #89).
+      ENABLE_INVADER_ENEMY: "false"
+
       UPDATE_ON_BOOT: "true"
     ports:
       - "${PALWORLD_PUBLIC_PORT:-8211}:${PALWORLD_PUBLIC_PORT:-8211}/udp"
