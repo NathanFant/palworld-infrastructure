@@ -78,14 +78,21 @@ services:
       # x86-only) never reclaims memory from translated/compiled code blocks by
       # default -- confirmed via a direct comparison: the same save runs fine
       # natively (no emulation) on a 32GB machine, but hits severe swap thrashing
-      # here despite the same 32GB. For a long-running, code-diverse Unreal Engine
-      # process (many distinct pal/AI code paths), that unbounded translation
-      # cache is a plausible, mechanistically distinct memory sink from the game's
-      # own object/save data (see issue #93). This env var reaches box64 itself
-      # (not the Palworld game), since container env vars are inherited by every
-      # process the entrypoint eventually execs, including the box64-wrapped
-      # server binary.
+      # here despite the same 32GB (see issue #93). BOX64_DYNAREC_PURGE=1 alone
+      # (default purge age) made no measurable difference after ~19 minutes --
+      # still ~31.5GB RSS / 14GB swap, unchanged from the untouched baseline.
+      # Trying a more aggressive combination before concluding box64 tuning is a
+      # dead end (see issue #95): a much lower purge age so purging actually
+      # kicks in within the window that matters, smaller compiled blocks
+      # (BIGBLOCK=0, which box64's own docs list as a stability-favoring
+      # tradeoff, not a risk), and skipping per-block architecture-tracking
+      # metadata (NOARCH=1). These reach box64 itself, not the Palworld game --
+      # container env vars are inherited by every process the entrypoint
+      # eventually execs, including the box64-wrapped server binary.
       BOX64_DYNAREC_PURGE: "1"
+      BOX64_DYNAREC_PURGE_AGE: "256"
+      BOX64_DYNAREC_BIGBLOCK: "0"
+      BOX64_DYNAREC_NOARCH: "1"
 
       UPDATE_ON_BOOT: "true"
     ports:
