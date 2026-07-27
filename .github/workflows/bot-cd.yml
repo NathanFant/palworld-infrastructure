@@ -74,22 +74,31 @@ jobs:
     # triggered `workflow_dispatch` ("Run workflow" in the Actions UI), never as a
     # consequence of a push/merge. It never sees the bot's real secrets either --
     # those are already on the VM from a prior scripts/deploy-bot.sh run; this job
-    # only needs SSH access to pull the new image and recreate the container.
+    # only needs SSH access to pull the new image and recreate the container. The
+    # bot runs on the same VM as the game server now (see
+    # docs/decisions/005-consolidate-bot-onto-game-vm.md), reached over SSH as the
+    # game VM's admin user -- not a separate bot VM.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      # DEPLOY_VM_HOST/DEPLOY_VM_SSH_USER are plain repo Variables, not Secrets -- a
+      # hostname and username aren't sensitive; only the private key below is. Passed
+      # through env: rather than interpolated directly into the run: string below, so
+      # this pattern stays safe even if this workflow is ever copied somewhere its
+      # inputs could be less trusted.
+      DEPLOY_VM_HOST: ${{ vars.DEPLOY_VM_HOST }}
+      DEPLOY_VM_SSH_USER: ${{ vars.DEPLOY_VM_SSH_USER }}
     steps:
       - name: Set up SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.BOT_VM_SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.DEPLOY_VM_SSH_PRIVATE_KEY }}
 
       - name: Pull the new image and restart the bot
-        # BOT_VM_HOST/BOT_VM_SSH_USER are plain repo Variables, not Secrets -- a
-        # hostname and username aren't sensitive; only the private key above is.
         run: |
-          ssh -o StrictHostKeyChecking=accept-new "${{ vars.BOT_VM_SSH_USER }}@${{ vars.BOT_VM_HOST }}" '
+          ssh -o StrictHostKeyChecking=accept-new "${DEPLOY_VM_SSH_USER}@${DEPLOY_VM_HOST}" '
             cd /opt/palworld-bot &&
             sudo -u bot docker compose pull &&
             sudo -u bot docker compose up -d

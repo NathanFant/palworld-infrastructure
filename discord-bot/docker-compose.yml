@@ -1,16 +1,26 @@
-# Discord bot, deployed to /opt/palworld-bot/docker-compose.yml on the bot VM (the
-# path infrastructure/cloud-init/bot-vm.yaml creates and scripts/deploy-bot.sh ships
-# to). Reads its environment from a sibling .env file rendered by deploy-bot.sh from
-# the repo root's .env.local -- see .env.example for the full variable list.
+# Discord bot, deployed to /opt/palworld-bot/docker-compose.yml on the game VM (the
+# same VM the Palworld server runs on -- see
+# docs/decisions/005-consolidate-bot-onto-game-vm.md for why there's no separate bot
+# VM). The path is created by infrastructure/cloud-init/game-vm.yaml and shipped to
+# by scripts/deploy-bot.sh. Reads its environment from a sibling .env file rendered
+# by deploy-bot.sh from the repo root's .env.local -- see .env.example for the full
+# variable list.
 #
 # Unlike docker/compose.yml (the Palworld server, deliberately started/stopped on
 # demand), this container is meant to run continuously: it's what makes /server
 # start possible in the first place, so it can't be the thing waiting to be started
-# (see CLAUDE.md's "two always-on VMs" decision).
+# (see CLAUDE.md's "one always-on VM" decision).
 services:
   discord-bot:
     image: ${DISCORD_BOT_IMAGE:-ghcr.io/nathanfant/palworld-infrastructure/discord-bot:latest}
     restart: unless-stopped
+    # Shares the host's network namespace instead of Docker's default bridge -- this
+    # container's connections are 100% outbound (Discord gateway, SSH to 127.0.0.1,
+    # RCON to 127.0.0.1), it never listens on anything, so giving up bridge isolation
+    # costs nothing real, and it's what lets "127.0.0.1" inside the container mean
+    # the actual host running the Palworld server. See
+    # docs/decisions/005-consolidate-bot-onto-game-vm.md.
+    network_mode: host
     env_file:
       - .env
     volumes:

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Ships discord-bot/docker-compose.yml, the bot's forced-command-restricted SSH
-# private key, and a rendered .env to /opt/palworld-bot/ on the bot VM, then starts
-# (or restarts) it. Uses the ADMIN ssh key (a real shell), never the bot's own
+# private key, and a rendered .env to /opt/palworld-bot/ on the game VM (the same
+# host scripts/deploy.sh targets -- the Discord bot runs as a second container
+# there, see docs/decisions/005-consolidate-bot-onto-game-vm.md), then starts (or
+# restarts) it. Uses the ADMIN ssh key (a real shell), never the bot's own
 # restricted key -- shipping secrets/config is a human/admin action, per CLAUDE.md.
 #
 # This is the one place the live Discord bot token and the game VM's SSH private key
@@ -35,22 +37,26 @@ env_get() {
   grep -E "^${key}=" "${ENV_LOCAL}" | tail -n1 | cut -d '=' -f2-
 }
 
-BOT_VM_HOST="$(env_get BOT_VM_HOST)"
+# Deploys to the same host scripts/deploy.sh targets -- GAME_VM_HOST here is the
+# real, externally-reachable IP/hostname the admin key connects to. This is NOT the
+# same value the deployed bot container's own GAME_VM_HOST ends up as (127.0.0.1,
+# hardcoded below when rendering its .env) -- see that section for why.
+DEPLOY_HOST="$(env_get GAME_VM_HOST)"
 ADMIN_SSH_USER="$(env_get ADMIN_SSH_USER)"
 ADMIN_SSH_PRIVATE_KEY_PATH="$(env_get ADMIN_SSH_PRIVATE_KEY_PATH)"
 GAME_VM_SSH_PRIVATE_KEY_PATH="$(env_get GAME_VM_SSH_PRIVATE_KEY_PATH)"
 
-if [ -z "${BOT_VM_HOST}" ] || [ -z "${ADMIN_SSH_USER}" ] || [ -z "${ADMIN_SSH_PRIVATE_KEY_PATH}" ]; then
-  echo "BOT_VM_HOST, ADMIN_SSH_USER, and ADMIN_SSH_PRIVATE_KEY_PATH must all be set in .env.local." >&2
+if [ -z "${DEPLOY_HOST}" ] || [ -z "${ADMIN_SSH_USER}" ] || [ -z "${ADMIN_SSH_PRIVATE_KEY_PATH}" ]; then
+  echo "GAME_VM_HOST, ADMIN_SSH_USER, and ADMIN_SSH_PRIVATE_KEY_PATH must all be set in .env.local." >&2
   exit 1
 fi
 
 if [ -z "${GAME_VM_SSH_PRIVATE_KEY_PATH}" ] || [ ! -f "${GAME_VM_SSH_PRIVATE_KEY_PATH}" ]; then
-  echo "GAME_VM_SSH_PRIVATE_KEY_PATH must point at an existing file -- the bot needs its own private key to reach the game VM." >&2
+  echo "GAME_VM_SSH_PRIVATE_KEY_PATH must point at an existing file -- the bot needs its own private key to reach the game server over loopback." >&2
   exit 1
 fi
 
-SSH_TARGET="${ADMIN_SSH_USER}@${BOT_VM_HOST}"
+SSH_TARGET="${ADMIN_SSH_USER}@${DEPLOY_HOST}"
 SSH_OPTS=(-i "${ADMIN_SSH_PRIVATE_KEY_PATH}" -o StrictHostKeyChecking=accept-new)
 
 # Rendered .env holds the real Discord bot token and RCON password -- a private temp
@@ -66,19 +72,33 @@ chmod 600 "${RENDERED_ENV}"
   echo "DISCORD_VOICE_CHANNEL_ID=$(env_get DISCORD_VOICE_CHANNEL_ID)"
   echo "DISCORD_STATUS_CHANNEL_ID=$(env_get DISCORD_STATUS_CHANNEL_ID)"
   echo "DISCORD_ADMIN_ROLE_ID=$(env_get DISCORD_ADMIN_ROLE_ID)"
-  echo "GAME_VM_HOST=$(env_get GAME_VM_HOST)"
-  echo "GAME_VM_SSH_PORT=$(env_get GAME_VM_SSH_PORT)"
-  echo "GAME_VM_SSH_USER=$(env_get GAME_VM_SSH_USER)"
-  echo "GAME_VM_SSH_PRIVATE_KEY_PATH=$(env_get GAME_VM_SSH_PRIVATE_KEY_PATH)"
-  echo "RCON_HOST=$(env_get RCON_HOST)"
+  # Hardcoded, not echoed from .env.local -- GAME_VM_HOST/RCON_HOST in .env.local are
+  # the real, externally-reachable IP (DEPLOY_HOST above needs that value for SSH
+  # targeting; a locally-run bot, for dev, would too). The deployed bot container, by
+  # contrast, always runs ON the game VM itself, so its own config must be 127.0.0.1
+  # regardless of what DEPLOY_HOST happens to be -- echoing the local value here was a
+  # real bug (issue #62): it would have shipped the real IP into the container's own
+  # .env, breaking RCON entirely (docker/compose.yml binds it to 127.0.0.1 only) and
+  # working for SSH only by accident of network routing, not by design.
+  echo "GAME_VM_HOST=127.0.0.1"
+  echo "GAME_VM_SSH_PORT=22"
+  echo "GAME_VM_SSH_USER=palworld-bot"
+  # Same reasoning -- this is always the fixed in-container path the compose file's
+  # ./secrets:/app/secrets:ro mount resolves to, never whatever local filesystem path
+  # (e.g. a Windows path) GAME_VM_SSH_PRIVATE_KEY_PATH happens to hold on the machine
+  # running this script.
+  echo "GAME_VM_SSH_PRIVATE_KEY_PATH=./secrets/palworld-bot-ssh-key"
+  echo "RCON_HOST=127.0.0.1"
   echo "RCON_PORT=$(env_get RCON_PORT)"
   echo "RCON_PASSWORD=$(env_get RCON_PASSWORD)"
   echo "SERVER_RESTART_INTERVAL_HOURS=$(env_get SERVER_RESTART_INTERVAL_HOURS)"
-  echo "BOT_STATE_FILE_PATH=$(env_get BOT_STATE_FILE_PATH)"
+  # Same reasoning again -- always the fixed in-container path the compose file's
+  # ./data:/app/data mount resolves to.
+  echo "BOT_STATE_FILE_PATH=./data/state.json"
 } > "${RENDERED_ENV}"
 
-echo "Ensuring /opt/palworld-bot exists on ${BOT_VM_HOST}..."
-# Owned by "bot" (infrastructure/cloud-init/bot-vm.yaml's dedicated user), not the
+echo "Ensuring /opt/palworld-bot exists on ${DEPLOY_HOST}..."
+# Owned by "bot" (infrastructure/cloud-init/game-vm.yaml's dedicated user), not the
 # admin user running this script -- the container itself runs as this user.
 ssh "${SSH_OPTS[@]}" "${SSH_TARGET}" "sudo mkdir -p /opt/palworld-bot/secrets && sudo chown -R bot:docker /opt/palworld-bot"
 
