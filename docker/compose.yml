@@ -66,6 +66,8 @@ services:
       # invader raids and an oversized pal population already caused (see #89).
       # These caps are well above anything a 3-person server should ever need.
       PHYSICS_ACTIVE_DROP_ITEM_MAX_NUM: "100"
+      # Per-player, not server-wide (per docs.palworldgame.com) -- up to ~9000
+      # combined pieces across 3 players before anyone's blocked from building.
       MAX_BUILDING_LIMIT_NUM: "3000"
       # Default (3000) is generous for a 3-person server; lowered as a cheap,
       # unlikely-to-be-felt trim on top of the caps above.
