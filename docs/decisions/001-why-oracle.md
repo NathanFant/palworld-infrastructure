@@ -2,8 +2,9 @@
 
 ## Decision
 
-Host on Oracle Cloud Infrastructure's Always Free tier: a single Ampere A1.Flex instance (2 OCPU / 12GB, ARM — see
-the 2026-07-24 update below), provisioned via Terraform, running both the Palworld game server and the Discord bot
+Host on Oracle Cloud Infrastructure, primarily on the Always Free tier: a single Ampere A1.Flex instance (2 OCPU,
+within the free allowance / 32GB, exceeding it by design — see the 2026-07-24 and 2026-07-27 updates below),
+provisioned via Terraform, running both the Palworld game server and the Discord bot
 as separate Docker containers. (Originally provisioned as two instances — a second `VM.Standard.E2.1.Micro` for the
 bot — until Oracle capacity for that shape proved unavailable for days; see
 [`005-consolidate-bot-onto-game-vm.md`](005-consolidate-bot-onto-game-vm.md) for why one VM replaced two.)
@@ -62,7 +63,8 @@ and added a `validation` block as a guardrail against accidentally requesting mo
 tenancy now gets — a soft 1-4 OCPU / 1-24GB sanity range rather than a hard 2/12 cap, since a legitimately
 higher-limit tenancy (per the PAYG ambiguity above) is a real, if unconfirmed, possibility and shouldn't be blocked
 outright. Overriding either variable is documented as requiring the operator to actually check their own tenancy's
-limit first, not guess.
+limit first, not guess. (As of the 2026-07-27 update below, `game_vm_memory_gb`'s range serves a second, distinct
+purpose too — see there.)
 
 **Is 2 OCPU/12GB still enough for this project?** Genuinely uncertain, not a confirmed "yes" — worth stating
 precisely rather than overclaiming. Pocketpair's own official requirements
@@ -94,3 +96,26 @@ persists, it's genuine capacity scarcity as originally assumed.
 Sources: [InfoQ](https://www.infoq.com/news/2026/07/oracle-cloud-free-tier-limits/),
 [Oracle Always Free Resources docs](https://docs.oracle.com/en-us/iaas/Content/FreeTier/freetier_topic-Always_Free_Resources.htm),
 [linuxiac.com](https://linuxiac.com/oracle-quietly-cuts-free-tier-ampere-a1-resources-in-half/).
+
+## Update (2026-07-27) — 12GB wasn't enough; bumped memory to 32GB (a small, deliberate paid excess)
+
+The previous update's open question — "is 2 OCPU/12GB still enough for this project?" — is no longer uncertain.
+`docs/runbooks/post-allocation-checklist.md`'s own verification step (actually running the server with real
+players) answered it empirically: the deployed server was repeatedly OOM-killed under real gameplay, with a fresh
+restart alone (before any player even reconnected) already using ~11GB RAM. 12GB was under real, not just
+Pocketpair-recommended, requirements for this world.
+
+**Decision (PR #74, issue #73):** raised `game_vm_memory_gb`'s default and validation ceiling from 12/24 to 32/64.
+OCPUs stay at 2 (still fully within the free allowance) — CPU was never the bottleneck, and A1.Flex allows up to
+64GB of memory per OCPU, so no OCPU increase was needed to support more RAM. The 20GB above the 12GB free allowance
+is billed at OCI's on-demand A1.Flex rate (~$0.0015/GB-hr), roughly **$22/month** — a small, deliberate, ongoing
+cost, not a one-off.
+
+This changes what `game_vm_memory_gb`'s validation range means, worth stating plainly: for OCPUs, the 1-4 range
+documented above is still purely an anti-accident guardrail (nothing currently justifies exceeding the free
+allowance there). For memory, the range now does double duty — still a guardrail against a wildly-wrong fat-finger
+value (e.g. accidentally requesting 64GB), but the 12→32 portion specifically is no longer "stay within the free
+tier by default," it's "this project's actual, tested memory requirement, which happens to cost a small amount
+because Oracle's free allowance shrank out from under it." Cheaper alternatives (a smaller memory bump, or hosting
+elsewhere entirely) were considered and explicitly rejected in favor of staying on Oracle at this size — see the
+cost/alternatives discussion in issue #73 and PR #74 for the full comparison.
