@@ -15,6 +15,17 @@ const updateStateMock = vi.fn();
 
 vi.mock("./rcon.js", () => ({
   sendRconCommand: (...args: unknown[]) => sendRconCommandMock(...args),
+  // Real implementation, not a mock -- idleShutdownManager.ts's own logic
+  // (idle-timer start/clear/threshold) is what these tests exercise, and that
+  // logic depends on parsePlayerCount actually parsing correctly. parsePlayerCount
+  // itself has its own dedicated tests in rcon.test.ts.
+  parsePlayerCount: (response: string) => {
+    const lines = response
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    return Math.max(0, lines.length - 1);
+  },
 }));
 
 vi.mock("./serverControl.js", () => ({
@@ -33,7 +44,6 @@ let statusChannel: { isSendable: () => boolean; send: ReturnType<typeof vi.fn> }
 let client: { channels: { fetch: ReturnType<typeof vi.fn> } };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let runIdleCheck: (client: any) => Promise<void>;
-let parsePlayerCount: (response: string) => number;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -47,21 +57,7 @@ beforeEach(async () => {
   statusChannel = { isSendable: () => true, send: vi.fn().mockResolvedValue({ id: "msg-id" }) };
   client = { channels: { fetch: vi.fn().mockResolvedValue(statusChannel) } };
 
-  ({ runIdleCheck, parsePlayerCount } = await import("./idleShutdownManager.js"));
-});
-
-describe("parsePlayerCount", () => {
-  it("counts zero players for a header-only response", () => {
-    expect(parsePlayerCount("name,playeruid,steamid")).toBe(0);
-  });
-
-  it("counts one player row after the header", () => {
-    expect(parsePlayerCount("name,playeruid,steamid\nAlice,123,456")).toBe(1);
-  });
-
-  it("counts multiple player rows", () => {
-    expect(parsePlayerCount("name,playeruid,steamid\nAlice,1,2\nBob,3,4")).toBe(2);
-  });
+  ({ runIdleCheck } = await import("./idleShutdownManager.js"));
 });
 
 describe("runIdleCheck", () => {

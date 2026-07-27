@@ -1,6 +1,6 @@
 import { Client } from "discord.js";
 import { config } from "../config.js";
-import { sendRconCommand } from "./rcon.js";
+import { parsePlayerCount, sendRconCommand } from "./rcon.js";
 import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
 
@@ -8,7 +8,9 @@ export type ServerLifecycleStatus = "online" | "starting" | "offline";
 
 interface HeartbeatSnapshot {
   status: ServerLifecycleStatus;
-  playerInfo?: string;
+  /** Undefined when RCON's ShowPlayers itself failed -- distinct from 0, which
+   * means it succeeded and genuinely nobody's connected. */
+  playerCount?: number;
 }
 
 async function getSnapshot(): Promise<HeartbeatSnapshot> {
@@ -29,7 +31,12 @@ async function getSnapshot(): Promise<HeartbeatSnapshot> {
   }
 
   const playersResult = await sendRconCommand("ShowPlayers");
-  return { status: "online", playerInfo: playersResult.ok ? playersResult.response : undefined };
+  return {
+    status: "online",
+    playerCount: playersResult.ok && playersResult.response !== undefined
+      ? parsePlayerCount(playersResult.response)
+      : undefined,
+  };
 }
 
 function formatUptime(serverStartedAt: string | null): string {
@@ -50,8 +57,11 @@ export function renderEmbedContent(snapshot: HeartbeatSnapshot, serverStartedAt:
     return "🟡 **Palworld server is starting...**";
   }
   const uptime = formatUptime(serverStartedAt);
-  const players = snapshot.playerInfo ?? "(player info unavailable)";
   const connectLine = formatConnectLine();
+  const players =
+    snapshot.playerCount === undefined
+      ? "Players online: (unavailable)"
+      : `Players online: ${snapshot.playerCount}`;
   return `🟢 **Palworld server is online.**\nUptime: ${uptime}\n${connectLine}\n${players}`;
 }
 

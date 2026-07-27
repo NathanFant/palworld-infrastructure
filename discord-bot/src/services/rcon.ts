@@ -7,6 +7,19 @@ export interface RconResult {
   error?: string;
 }
 
+// Palworld's RCON `ShowPlayers` returns a CSV header line ("name,playeruid,steamid")
+// followed by one line per connected player, or just the header alone when nobody's
+// connected. Shared by idleShutdownManager.ts (idle detection) and
+// statusHeartbeat.ts (the displayed player count) rather than each parsing it
+// independently.
+export function parsePlayerCount(response: string): number {
+  const lines = response
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  return Math.max(0, lines.length - 1);
+}
+
 // The server being unreachable is an expected, frequent state -- this project's
 // whole point is that the game server is intentionally not running 24/7 (see
 // CLAUDE.md's operational philosophy). Callers get a typed result, never a thrown
