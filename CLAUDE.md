@@ -21,7 +21,7 @@ Two things are being built at once:
                      +------------------------+
                                   |
                                   v
-                  Game VM (Ampere A1, 2 OCPU/12GB, always on)
+                  Game VM (Ampere A1, 2 OCPU/32GB, always on)
                   - Docker + Palworld dedicated server container
                   - Discord bot container (Node/TS, discord.js v14)
                     - Slash commands, voice-presence watcher
