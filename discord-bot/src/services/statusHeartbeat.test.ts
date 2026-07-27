@@ -31,6 +31,18 @@ interface FakeStatusChannel {
   send: ReturnType<typeof vi.fn>;
 }
 
+// Every fetched/sent message needs `pinned`/`pin` now that upsertStatusMessage pins
+// the status message on first creation (see statusHeartbeat.ts's pinIfNeeded) --
+// this is what makes the message findable without needing to scroll back through
+// the channel's history, since edits alone don't surface as new/unread in Discord.
+function fakeMessage(overrides: { edit?: ReturnType<typeof vi.fn>; pinned?: boolean } = {}) {
+  return {
+    edit: overrides.edit ?? vi.fn().mockResolvedValue(undefined),
+    pinned: overrides.pinned ?? false,
+    pin: vi.fn().mockResolvedValue(undefined),
+  };
+}
+
 let statusChannel: FakeStatusChannel;
 let client: { channels: { fetch: ReturnType<typeof vi.fn> } };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,7 +58,7 @@ beforeEach(async () => {
   statusChannel = {
     isSendable: () => true,
     messages: { fetch: vi.fn() },
-    send: vi.fn().mockResolvedValue({ id: "new-message-id" }),
+    send: vi.fn().mockResolvedValue({ id: "new-message-id", pinned: false, pin: vi.fn().mockResolvedValue(undefined) }),
   };
   client = { channels: { fetch: vi.fn().mockResolvedValue(statusChannel) } };
 
@@ -54,7 +66,7 @@ beforeEach(async () => {
 });
 
 describe("runHeartbeatCheck", () => {
-  it("sends a fresh status message on the very first check", async () => {
+  it("sends a fresh status message and pins it on the very first check", async () => {
     serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
     getStateMock.mockResolvedValue({ lastKnownUp: false, statusMessageId: null, serverStartedAt: null });
 
@@ -62,6 +74,8 @@ describe("runHeartbeatCheck", () => {
 
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("offline"));
     expect(statusChannel.send).toHaveBeenCalledTimes(1);
+    const sentMessage = await statusChannel.send.mock.results[0].value;
+    expect(sentMessage.pin).toHaveBeenCalled();
     expect(updateStateMock).toHaveBeenCalledWith({ lastKnownUp: false, statusMessageId: "new-message-id" });
   });
 
@@ -76,7 +90,8 @@ describe("runHeartbeatCheck", () => {
       serverStartedAt: new Date().toISOString(),
     });
     const editMock = vi.fn().mockResolvedValue(undefined);
-    statusChannel.messages.fetch.mockResolvedValue({ edit: editMock });
+    const message = fakeMessage({ edit: editMock });
+    statusChannel.messages.fetch.mockResolvedValue(message);
 
     await runHeartbeatCheck(client);
 
@@ -95,7 +110,7 @@ describe("runHeartbeatCheck", () => {
     });
     getStateMock.mockResolvedValue({ lastKnownUp: false, statusMessageId: "existing-id", serverStartedAt: null });
     const editMock = vi.fn().mockResolvedValue(undefined);
-    statusChannel.messages.fetch.mockResolvedValue({ edit: editMock });
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ edit: editMock }));
 
     await runHeartbeatCheck(client);
 
@@ -110,7 +125,7 @@ describe("runHeartbeatCheck", () => {
 
   it("edits the existing message in place rather than sending a new one when one already exists", async () => {
     const editMock = vi.fn().mockResolvedValue(undefined);
-    statusChannel.messages.fetch.mockResolvedValue({ edit: editMock });
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ edit: editMock }));
     serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
     getStateMock.mockResolvedValue({ lastKnownUp: false, statusMessageId: "existing-id", serverStartedAt: null });
 
@@ -120,10 +135,21 @@ describe("runHeartbeatCheck", () => {
     expect(statusChannel.send).not.toHaveBeenCalled();
   });
 
+  it("does not re-pin a message that's already pinned", async () => {
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ pinned: true }));
+    serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
+    getStateMock.mockResolvedValue({ lastKnownUp: false, statusMessageId: "existing-id", serverStartedAt: null });
+
+    await runHeartbeatCheck(client);
+
+    const message = await statusChannel.messages.fetch.mock.results[0].value;
+    expect(message.pin).not.toHaveBeenCalled();
+  });
+
   it("does not touch Discord or the state store on a second check with no change in content", async () => {
     serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
     getStateMock.mockResolvedValue({ lastKnownUp: false, statusMessageId: "existing-id", serverStartedAt: null });
-    statusChannel.messages.fetch.mockResolvedValue({ edit: vi.fn().mockResolvedValue(undefined) });
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage());
 
     await runHeartbeatCheck(client); // first check: establishes lastRenderedContent
     statusChannel.messages.fetch.mockClear();
@@ -148,7 +174,7 @@ describe("runHeartbeatCheck", () => {
       serverStartedAt: new Date().toISOString(),
     });
     const editMock = vi.fn().mockResolvedValue(undefined);
-    statusChannel.messages.fetch.mockResolvedValue({ edit: editMock });
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ edit: editMock }));
 
     sendRconCommandMock.mockResolvedValueOnce({ ok: true, response: "Players: 1" });
     await runHeartbeatCheck(client);
@@ -175,7 +201,7 @@ describe("runHeartbeatCheck", () => {
       status: { running: true, state: "running", health: "healthy" },
     });
     statusChannel.messages.fetch.mockImplementation((id: string) =>
-      id === "new-message-id" ? Promise.resolve({ edit: vi.fn().mockResolvedValue(undefined) }) : Promise.reject(new Error("Unknown Message")),
+      id === "new-message-id" ? Promise.resolve(fakeMessage()) : Promise.reject(new Error("Unknown Message")),
     );
 
     await Promise.all([runHeartbeatCheck(client), runHeartbeatCheck(client)]);

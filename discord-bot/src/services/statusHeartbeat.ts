@@ -78,6 +78,7 @@ async function upsertStatusMessage(
     try {
       const message = await statusChannel.messages.fetch(existingMessageId);
       await message.edit(content);
+      await pinIfNeeded(message);
       return existingMessageId;
     } catch {
       // Message deleted or otherwise unreachable -- fall through and send a new one.
@@ -85,7 +86,24 @@ async function upsertStatusMessage(
   }
 
   const message = await statusChannel.send(content);
+  await pinIfNeeded(message);
   return message.id;
+}
+
+// This message is edited in place forever, never re-sent -- with no other signal
+// that it changed (Discord doesn't mark a channel unread for edits, only new
+// messages), it's otherwise invisible once anything else gets posted after it.
+// Pinning makes it findable via the channel's pinned-messages panel regardless of
+// how far back it sits in scrollback.
+async function pinIfNeeded(message: { pinned: boolean; pin: () => Promise<unknown> }): Promise<void> {
+  if (message.pinned) {
+    return;
+  }
+  try {
+    await message.pin();
+  } catch (error) {
+    console.error("Failed to pin the status message (bot may be missing Manage Messages permission):", error);
+  }
 }
 
 // Avoids re-editing the Discord message every tick when nothing's actually changed --
