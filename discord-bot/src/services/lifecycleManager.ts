@@ -46,7 +46,6 @@ async function checkRestartCompletion(client: Client<true>, restartTriggeredAt: 
   await updateState({
     serverStartedAt: new Date().toISOString(),
     restartTriggeredAt: null,
-    lastKnownUp: true,
     idleSince: null,
   });
   await announce(client, "🟢 Scheduled restart complete -- the Palworld server is back online.");

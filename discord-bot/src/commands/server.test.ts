@@ -106,7 +106,7 @@ describe("server command: /server start", () => {
 
     expect(serverControlStartMock).toHaveBeenCalled();
     expect(updateStateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ lastKnownUp: true, serverStartedAt: expect.any(String) }),
+      expect.objectContaining({ serverStartedAt: expect.any(String) }),
     );
     expect(interaction.editReply).toHaveBeenLastCalledWith(expect.stringContaining("online"));
   });
@@ -153,7 +153,7 @@ describe("server command: /server stop", () => {
 
     expect(sendRconCommandMock).toHaveBeenCalledWith("Save");
     expect(serverControlStopMock).toHaveBeenCalled();
-    expect(updateStateMock).toHaveBeenCalledWith({ lastKnownUp: false, restartTriggeredAt: null, idleSince: null });
+    expect(updateStateMock).toHaveBeenCalledWith({ restartTriggeredAt: null, idleSince: null });
     expect(interaction.editReply).toHaveBeenLastCalledWith(expect.stringContaining("stopped"));
   });
 
@@ -209,7 +209,7 @@ describe("server command: /server restart", () => {
     expect(serverControlStopMock).toHaveBeenCalled();
     expect(serverControlStartMock).toHaveBeenCalled();
     expect(updateStateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ lastKnownUp: true, serverStartedAt: expect.any(String) }),
+      expect.objectContaining({ serverStartedAt: expect.any(String) }),
     );
     expect(interaction.editReply).toHaveBeenLastCalledWith(expect.stringContaining("restarted"));
   });

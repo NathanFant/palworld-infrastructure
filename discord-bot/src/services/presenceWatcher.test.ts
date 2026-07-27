@@ -243,7 +243,7 @@ describe("maybeAutoStart", () => {
 
     expect(serverControlStartMock).toHaveBeenCalled();
     expect(updateStateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ lastKnownUp: true, restartTriggeredAt: null, idleSince: null }),
+      expect.objectContaining({ restartTriggeredAt: null, idleSince: null }),
     );
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("joined voice"));
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("online"));

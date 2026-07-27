@@ -4,7 +4,7 @@ import { parsePlayerCount, sendRconCommand } from "./rcon.js";
 import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
 
-export type ServerLifecycleStatus = "online" | "starting" | "offline";
+export type ServerLifecycleStatus = "online" | "starting" | "unhealthy" | "offline";
 
 interface HeartbeatSnapshot {
   status: ServerLifecycleStatus;
@@ -25,7 +25,15 @@ async function getSnapshot(): Promise<HeartbeatSnapshot> {
   // process inside is actually ready (SteamCMD re-verifying on boot, world load,
   // etc.). The image's own baked-in HEALTHCHECK is what actually reflects "ready for
   // players," so running-but-not-yet-healthy is reported as "starting," not "online."
+  //
+  // "unhealthy" (Docker's own status once a healthcheck has failed enough times in a
+  // row) is reported distinctly from "starting" -- a container stuck failing its
+  // healthcheck indefinitely (e.g. a crash-loop) isn't "still booting," and showing
+  // "starting..." forever for that case would be actively misleading.
   const health = statusResult.status?.health;
+  if (health === "unhealthy") {
+    return { status: "unhealthy" };
+  }
   if (health && health !== "healthy") {
     return { status: "starting" };
   }
@@ -55,6 +63,9 @@ export function renderEmbedContent(snapshot: HeartbeatSnapshot, serverStartedAt:
   }
   if (snapshot.status === "starting") {
     return "🟡 **Palworld server is starting...**";
+  }
+  if (snapshot.status === "unhealthy") {
+    return "🟠 **Palworld server is unhealthy** (container running, but failing its health check -- may be crash-looping).";
   }
   const uptime = formatUptime(serverStartedAt);
   const connectLine = formatConnectLine();
@@ -125,18 +136,30 @@ let lastRenderedContent: string | undefined;
 async function runHeartbeatCheckOnce(client: Client<true>): Promise<void> {
   const state = await getState();
   const snapshot = await getSnapshot();
-  const content = renderEmbedContent(snapshot, state.serverStartedAt);
+
+  // serverStartedAt is normally set by whatever *started* the server (commands/
+  // server.ts's /server start|restart, presenceWatcher.ts's auto-start, or
+  // lifecycleManager.ts's scheduled-restart completion) -- but a container that
+  // comes up some other way (a manual SSH-level restart, a bare `docker compose up`,
+  // Docker's own `restart: unless-stopped` recovering from a crash) never goes
+  // through any of those, and would otherwise show "Uptime: unknown" forever. The
+  // first tick that observes it non-offline with no recorded start time backfills
+  // "now" as the best available approximation.
+  const serverStartedAt =
+    snapshot.status !== "offline" && !state.serverStartedAt ? new Date().toISOString() : state.serverStartedAt;
+
+  const content = renderEmbedContent(snapshot, serverStartedAt);
 
   // A single live-edited message carries the full status (red/yellow/green) -- no
   // separate "just went online/offline" message, so a flappy server (e.g. crash-
   // looping) edits one message repeatedly instead of spamming the channel.
-  if (content === lastRenderedContent) {
+  if (content === lastRenderedContent && serverStartedAt === state.serverStartedAt) {
     return;
   }
 
   const messageId = await upsertStatusMessage(client, content, state.statusMessageId);
   lastRenderedContent = content;
-  await updateState({ lastKnownUp: snapshot.status !== "offline", statusMessageId: messageId });
+  await updateState({ serverStartedAt, statusMessageId: messageId });
 }
 
 // Serializes runHeartbeatCheck() calls -- without this, setInterval could fire an

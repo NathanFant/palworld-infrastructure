@@ -73,7 +73,6 @@ async function handleStart(interaction: ChatInputCommandInteraction): Promise<vo
   // idle-shutdown timer that happened to be pending from a previous session.
   await updateState({
     serverStartedAt: new Date().toISOString(),
-    lastKnownUp: true,
     restartTriggeredAt: null,
     idleSince: null,
   });
@@ -94,7 +93,7 @@ async function handleStop(interaction: ChatInputCommandInteraction): Promise<voi
   // A manual stop cancels any lifecycle-manager restart countdown, and any
   // idle-shutdown timer, that might have been pending -- there's nothing left to
   // restart or to be idle about.
-  await updateState({ lastKnownUp: false, restartTriggeredAt: null, idleSince: null });
+  await updateState({ restartTriggeredAt: null, idleSince: null });
   await interaction.editReply("The Palworld server has been stopped.");
 }
 
@@ -141,7 +140,6 @@ async function handleRestart(interaction: ChatInputCommandInteraction): Promise<
 
   await updateState({
     serverStartedAt: new Date().toISOString(),
-    lastKnownUp: true,
     restartTriggeredAt: null,
     idleSince: null,
   });
