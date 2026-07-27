@@ -1,20 +1,8 @@
 import { Client } from "discord.js";
 import { config } from "../config.js";
-import { sendRconCommand } from "./rcon.js";
+import { parsePlayerCount, sendRconCommand } from "./rcon.js";
 import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
-
-// Palworld's RCON `ShowPlayers` returns a CSV header line ("name,playeruid,steamid")
-// followed by one line per connected player, or just the header alone when nobody's
-// connected -- exported for direct unit testing rather than only exercising it
-// indirectly through the full check.
-export function parsePlayerCount(response: string): number {
-  const lines = response
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  return Math.max(0, lines.length - 1);
-}
 
 async function announce(client: Client<true>, content: string): Promise<void> {
   const statusChannel = await client.channels.fetch(config.discord.statusChannelId);

@@ -12,7 +12,7 @@ vi.mock("../config.js", () => ({
   },
 }));
 
-const { sendRconCommand } = await import("./rcon.js");
+const { sendRconCommand, parsePlayerCount } = await import("./rcon.js");
 
 describe("sendRconCommand", () => {
   beforeEach(() => {
@@ -46,5 +46,27 @@ describe("sendRconCommand", () => {
     connectMock.mockResolvedValue({ send, end });
 
     await expect(sendRconCommand("Save")).resolves.toEqual({ ok: true, response: "OK" });
+  });
+});
+
+describe("parsePlayerCount", () => {
+  it("counts zero players for a header-only response", () => {
+    expect(parsePlayerCount("name,playeruid,steamid")).toBe(0);
+  });
+
+  it("counts zero players for a completely empty response", () => {
+    expect(parsePlayerCount("")).toBe(0);
+  });
+
+  it("counts one player row after the header", () => {
+    expect(parsePlayerCount("name,playeruid,steamid\nAlice,123,456")).toBe(1);
+  });
+
+  it("counts multiple player rows", () => {
+    expect(parsePlayerCount("name,playeruid,steamid\nAlice,1,2\nBob,3,4")).toBe(2);
+  });
+
+  it("ignores blank lines and surrounding whitespace", () => {
+    expect(parsePlayerCount("name,playeruid,steamid\n\nAlice,1,2\n \nBob,3,4\n")).toBe(2);
   });
 });

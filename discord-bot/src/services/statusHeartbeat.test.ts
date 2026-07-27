@@ -14,6 +14,16 @@ const updateStateMock = vi.fn();
 
 vi.mock("./rcon.js", () => ({
   sendRconCommand: (...args: unknown[]) => sendRconCommandMock(...args),
+  // Real implementation (not a mock) -- these tests exercise statusHeartbeat.ts's
+  // own rendering logic against realistic ShowPlayers-shaped responses.
+  // parsePlayerCount itself has its own dedicated tests in rcon.test.ts.
+  parsePlayerCount: (response: string) => {
+    const lines = response
+      .split("\n")
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0);
+    return Math.max(0, lines.length - 1);
+  },
 }));
 
 vi.mock("./serverControl.js", () => ({
@@ -50,7 +60,7 @@ let runHeartbeatCheck: (client: any) => Promise<void>;
 
 beforeEach(async () => {
   vi.resetModules();
-  sendRconCommandMock.mockReset().mockResolvedValue({ ok: true, response: "Players: 0" });
+  sendRconCommandMock.mockReset().mockResolvedValue({ ok: true, response: "name,playeruid,steamid" });
   serverControlStatusMock.mockReset();
   getStateMock.mockReset();
   updateStateMock.mockReset().mockResolvedValue(undefined);
@@ -177,13 +187,45 @@ describe("runHeartbeatCheck", () => {
     const editMock = vi.fn().mockResolvedValue(undefined);
     statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ edit: editMock }));
 
-    sendRconCommandMock.mockResolvedValueOnce({ ok: true, response: "Players: 1" });
+    sendRconCommandMock.mockResolvedValueOnce({ ok: true, response: "name,playeruid,steamid\nAlice,1,2" });
     await runHeartbeatCheck(client);
 
-    sendRconCommandMock.mockResolvedValueOnce({ ok: true, response: "Players: 2" });
+    sendRconCommandMock.mockResolvedValueOnce({ ok: true, response: "name,playeruid,steamid\nAlice,1,2\nBob,3,4" });
     await runHeartbeatCheck(client);
 
     expect(editMock).toHaveBeenCalledTimes(2);
+    expect(editMock).toHaveBeenNthCalledWith(1, expect.stringContaining("Players online: 1"));
+    expect(editMock).toHaveBeenNthCalledWith(2, expect.stringContaining("Players online: 2"));
+  });
+
+  it("shows zero players online distinctly from an unavailable player count", async () => {
+    serverControlStatusMock.mockResolvedValue({
+      ok: true,
+      status: { running: true, state: "running", health: "healthy" },
+    });
+    getStateMock.mockResolvedValue({ lastKnownUp: true, statusMessageId: "existing-id", serverStartedAt: null });
+    const editMock = vi.fn().mockResolvedValue(undefined);
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ edit: editMock }));
+
+    sendRconCommandMock.mockResolvedValueOnce({ ok: true, response: "name,playeruid,steamid" });
+    await runHeartbeatCheck(client);
+
+    expect(editMock).toHaveBeenCalledWith(expect.stringContaining("Players online: 0"));
+  });
+
+  it("shows the player count as unavailable when ShowPlayers itself fails", async () => {
+    serverControlStatusMock.mockResolvedValue({
+      ok: true,
+      status: { running: true, state: "running", health: "healthy" },
+    });
+    getStateMock.mockResolvedValue({ lastKnownUp: true, statusMessageId: "existing-id", serverStartedAt: null });
+    const editMock = vi.fn().mockResolvedValue(undefined);
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ edit: editMock }));
+
+    sendRconCommandMock.mockResolvedValueOnce({ ok: false, error: "rcon unreachable" });
+    await runHeartbeatCheck(client);
+
+    expect(editMock).toHaveBeenCalledWith(expect.stringContaining("Players online: (unavailable)"));
   });
 
   it("serializes concurrent checks so the message is upserted only once", async () => {
