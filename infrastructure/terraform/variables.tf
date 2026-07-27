@@ -58,6 +58,12 @@ variable "palworld_port" {
   default     = 8211
 }
 
+variable "palworld_query_port" {
+  description = "UDP query port used for Steam/community server list discovery (thijsvanloef/palworld-server-docker's QUERY_PORT). Only needed while COMMUNITY=true in docker/compose.yml; open to the public internet like palworld_port."
+  type        = number
+  default     = 27015
+}
+
 variable "rcon_port" {
   description = "TCP port Palworld's RCON listens on. Not present in the security list or any NSG rule at all -- docker/compose.yml publishes it to 127.0.0.1 only, since the Discord bot runs as a second container on this same VM and reaches it over loopback (see docs/decisions/005-consolidate-bot-onto-game-vm.md)."
   type        = number
@@ -140,16 +146,21 @@ variable "game_vm_ocpus" {
 
 variable "game_vm_memory_gb" {
   description = <<-EOT
-    Memory (GB) for the Ampere A1 game VM. Default is the full Always Free A1
-    allowance as of Oracle's June 15, 2026 change -- previously 24. See
-    game_vm_ocpus's description for the same caveat about tenancy-specific limits.
+    Memory (GB) for the Ampere A1 game VM. The Always Free A1 allowance as of
+    Oracle's June 15, 2026 change is 12GB (see game_vm_ocpus's description for the
+    same tenancy-specific-limit caveat) -- this defaults to 32, an intentional,
+    billed excess over that allowance (~$22/month for the 20GB above free, at OCI's
+    A1.Flex on-demand rate of $0.0015/GB-hr), because real gameplay on this world
+    has repeatedly exceeded 12GB and triggered OOM kills. OCPUs stay within the free
+    allowance (see game_vm_ocpus) -- this is a memory-only cost, and A1.Flex allows
+    up to 64GB of memory per OCPU, so no OCPU increase is needed to support it.
   EOT
   type        = number
-  default     = 12
+  default     = 32
 
   validation {
-    condition     = var.game_vm_memory_gb >= 1 && var.game_vm_memory_gb <= 24
-    error_message = "game_vm_memory_gb should be 1-24 -- above 12 exceeds the documented Always Free allowance unless you've confirmed your tenancy retains the old limit (see this variable's description)."
+    condition     = var.game_vm_memory_gb >= 1 && var.game_vm_memory_gb <= 64
+    error_message = "game_vm_memory_gb should be 1-64 -- above 12 exceeds the documented Always Free allowance and is billed (see this variable's description for the expected cost)."
   }
 }
 
