@@ -4,8 +4,10 @@ import { sendRconCommand } from "./rcon.js";
 import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
 
+export type ServerLifecycleStatus = "online" | "starting" | "offline";
+
 interface HeartbeatSnapshot {
-  running: boolean;
+  status: ServerLifecycleStatus;
   playerInfo?: string;
 }
 
@@ -14,11 +16,20 @@ async function getSnapshot(): Promise<HeartbeatSnapshot> {
   const running = statusResult.ok && statusResult.status?.running === true;
 
   if (!running) {
-    return { running: false };
+    return { status: "offline" };
+  }
+
+  // The container reports State=running as soon as it starts -- well before the game
+  // process inside is actually ready (SteamCMD re-verifying on boot, world load,
+  // etc.). The image's own baked-in HEALTHCHECK is what actually reflects "ready for
+  // players," so running-but-not-yet-healthy is reported as "starting," not "online."
+  const health = statusResult.status?.health;
+  if (health && health !== "healthy") {
+    return { status: "starting" };
   }
 
   const playersResult = await sendRconCommand("ShowPlayers");
-  return { running: true, playerInfo: playersResult.ok ? playersResult.response : undefined };
+  return { status: "online", playerInfo: playersResult.ok ? playersResult.response : undefined };
 }
 
 function formatUptime(serverStartedAt: string | null): string {
@@ -32,12 +43,25 @@ function formatUptime(serverStartedAt: string | null): string {
 }
 
 export function renderEmbedContent(snapshot: HeartbeatSnapshot, serverStartedAt: string | null): string {
-  if (!snapshot.running) {
+  if (snapshot.status === "offline") {
     return "🔴 **Palworld server is offline.**";
+  }
+  if (snapshot.status === "starting") {
+    return "🟡 **Palworld server is starting...**";
   }
   const uptime = formatUptime(serverStartedAt);
   const players = snapshot.playerInfo ?? "(player info unavailable)";
-  return `🟢 **Palworld server is online.**\nUptime: ${uptime}\n${players}`;
+  const connectLine = formatConnectLine();
+  return `🟢 **Palworld server is online.**\nUptime: ${uptime}\n${connectLine}\n${players}`;
+}
+
+function formatConnectLine(): string {
+  const { publicHost, publicPort, serverPassword } = config.palworld;
+  if (!publicHost) {
+    return "Connect: (PALWORLD_PUBLIC_HOST not configured)";
+  }
+  const address = `${publicHost}:${publicPort}`;
+  return serverPassword ? `Connect: ${address} (password: ${serverPassword})` : `Connect: ${address}`;
 }
 
 async function upsertStatusMessage(
@@ -74,24 +98,17 @@ async function runHeartbeatCheckOnce(client: Client<true>): Promise<void> {
   const state = await getState();
   const snapshot = await getSnapshot();
   const content = renderEmbedContent(snapshot, state.serverStartedAt);
-  const transitioned = snapshot.running !== state.lastKnownUp;
 
-  if (transitioned) {
-    const statusChannel = await client.channels.fetch(config.discord.statusChannelId);
-    if (statusChannel?.isSendable()) {
-      await statusChannel.send(
-        snapshot.running ? "🟢 The Palworld server just came online." : "🔴 The Palworld server just went offline.",
-      );
-    }
-  }
-
-  if (!transitioned && content === lastRenderedContent) {
+  // A single live-edited message carries the full status (red/yellow/green) -- no
+  // separate "just went online/offline" message, so a flappy server (e.g. crash-
+  // looping) edits one message repeatedly instead of spamming the channel.
+  if (content === lastRenderedContent) {
     return;
   }
 
   const messageId = await upsertStatusMessage(client, content, state.statusMessageId);
   lastRenderedContent = content;
-  await updateState({ lastKnownUp: snapshot.running, statusMessageId: messageId });
+  await updateState({ lastKnownUp: snapshot.status !== "offline", statusMessageId: messageId });
 }
 
 // Serializes runHeartbeatCheck() calls -- without this, setInterval could fire an
@@ -100,10 +117,10 @@ async function runHeartbeatCheckOnce(client: Client<true>): Promise<void> {
 // exactly when a bare TCP connect to RCON/SSH hangs longest -- neither rcon-client
 // nor node-ssh sets a connect timeout, so a slow/absent server can easily exceed a
 // 60s interval). Two overlapping calls would both read the same stale
-// lastKnownUp/statusMessageId before either writes back, producing duplicate
-// transition announcements and/or duplicate status messages -- the same failure
-// class presenceWatcher.ts's renderQueue already fixed for a different module; this
-// carries that same pattern over here instead of re-deriving a new one.
+// statusMessageId before either writes back, producing duplicate status messages --
+// the same failure class presenceWatcher.ts's renderQueue already fixed for a
+// different module; this carries that same pattern over here instead of re-deriving
+// a new one.
 let heartbeatQueue: Promise<unknown> = Promise.resolve();
 
 export function runHeartbeatCheck(client: Client<true>): Promise<void> {

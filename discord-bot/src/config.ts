@@ -67,6 +67,15 @@ export const config = {
     port: Number(optional("RCON_PORT", "25575")),
     password: optional("RCON_PASSWORD", ""),
   },
+  // The address/credentials *players* connect with -- distinct from gameVm.host
+  // above, which is 127.0.0.1 in production (the bot's own loopback SSH target on
+  // the same VM). Rendered into the deployed bot's .env by scripts/deploy-bot.sh
+  // from the same real public IP scripts/deploy.sh and Terraform already use.
+  palworld: {
+    publicHost: optional("PALWORLD_PUBLIC_HOST", ""),
+    publicPort: Number(optional("PALWORLD_PUBLIC_PORT", "8211")),
+    serverPassword: optional("PALWORLD_SERVER_PASSWORD", ""),
+  },
   lifecycle: {
     restartIntervalHours: Number(optional("SERVER_RESTART_INTERVAL_HOURS", "48")),
     // Resolved against the process's working directory (not this source file's

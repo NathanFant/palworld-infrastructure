@@ -53,7 +53,9 @@ deployment sequence, not an allocation-blocked waiting list.
 7. **Verify the bot's live integrations against the real infrastructure**, not just its unit tests:
    - `/server status` reflects the real container state and RCON player count.
    - The voice-presence embed updates when someone joins/leaves the watched channel.
-   - The status heartbeat channel posts an online transition message and starts showing live uptime.
+   - The status heartbeat's single live-edited message flips to 🟢 online (with a connect line and live uptime) --
+     no separate transition message; a flapping server just edits the same message repeatedly instead of spamming
+     the channel.
 
 8. **Run one real backup and one real restore drill** before trusting either against the live world:
    - Confirm `palworld-backup@daily.service` (or the tier you want to test) actually uploads an object to the

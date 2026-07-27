@@ -12,6 +12,11 @@ export interface PalworldContainerStatus {
   running: boolean;
   /** Raw `State` field from `docker compose ps`, e.g. "running", "exited". */
   state?: string;
+  /** Raw `Health` field from `docker compose ps --format json`, e.g. "starting",
+   * "healthy", "unhealthy" -- reflects the image's own baked-in HEALTHCHECK, which
+   * only passes once the game process is actually up (not just the container).
+   * Undefined if the service defines no healthcheck at all. */
+  health?: string;
 }
 
 export interface ServerStatusResult {
@@ -65,8 +70,8 @@ function parsePalworldStatus(stdout: string): PalworldContainerStatus {
   }
 
   try {
-    const parsed = JSON.parse(lines[0]) as { State?: string };
-    return { running: parsed.State === "running", state: parsed.State };
+    const parsed = JSON.parse(lines[0]) as { State?: string; Health?: string };
+    return { running: parsed.State === "running", state: parsed.State, health: parsed.Health };
   } catch {
     return { running: false };
   }

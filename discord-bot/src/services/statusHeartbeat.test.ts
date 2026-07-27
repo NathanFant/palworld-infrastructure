@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("../config.js", () => ({
-  config: { discord: { statusChannelId: "status-channel-id" } },
+  config: {
+    discord: { statusChannelId: "status-channel-id" },
+    palworld: { publicHost: "203.0.113.10", publicPort: 8211, serverPassword: "apex" },
+  },
 }));
 
 const sendRconCommandMock = vi.fn();
@@ -58,34 +61,51 @@ describe("runHeartbeatCheck", () => {
     await runHeartbeatCheck(client);
 
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("offline"));
+    expect(statusChannel.send).toHaveBeenCalledTimes(1);
     expect(updateStateMock).toHaveBeenCalledWith({ lastKnownUp: false, statusMessageId: "new-message-id" });
   });
 
-  it("posts a transition message when the server just came online", async () => {
-    serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: true, state: "running" } });
+  it("edits the existing message in place when the server comes online, without sending a second message", async () => {
+    serverControlStatusMock.mockResolvedValue({
+      ok: true,
+      status: { running: true, state: "running", health: "healthy" },
+    });
     getStateMock.mockResolvedValue({
       lastKnownUp: false,
       statusMessageId: "existing-id",
       serverStartedAt: new Date().toISOString(),
     });
-    statusChannel.messages.fetch.mockResolvedValue({ edit: vi.fn().mockResolvedValue(undefined) });
+    const editMock = vi.fn().mockResolvedValue(undefined);
+    statusChannel.messages.fetch.mockResolvedValue({ edit: editMock });
 
     await runHeartbeatCheck(client);
 
-    expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("just came online"));
+    expect(editMock).toHaveBeenCalledWith(expect.stringContaining("online"));
+    expect(editMock).toHaveBeenCalledWith(expect.stringContaining("Connect: 203.0.113.10:8211 (password: apex)"));
+    expect(statusChannel.send).not.toHaveBeenCalled();
     expect(updateStateMock).toHaveBeenCalledWith(
       expect.objectContaining({ lastKnownUp: true, statusMessageId: "existing-id" }),
     );
   });
 
-  it("posts a transition message when the server just went offline", async () => {
-    serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
-    getStateMock.mockResolvedValue({ lastKnownUp: true, statusMessageId: "existing-id", serverStartedAt: null });
-    statusChannel.messages.fetch.mockResolvedValue({ edit: vi.fn().mockResolvedValue(undefined) });
+  it("renders yellow (starting) when the container is running but not yet healthy", async () => {
+    serverControlStatusMock.mockResolvedValue({
+      ok: true,
+      status: { running: true, state: "running", health: "starting" },
+    });
+    getStateMock.mockResolvedValue({ lastKnownUp: false, statusMessageId: "existing-id", serverStartedAt: null });
+    const editMock = vi.fn().mockResolvedValue(undefined);
+    statusChannel.messages.fetch.mockResolvedValue({ edit: editMock });
 
     await runHeartbeatCheck(client);
 
-    expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("just went offline"));
+    expect(editMock).toHaveBeenCalledWith(expect.stringContaining("starting"));
+    // Not yet online, so this shouldn't hit RCON for player info.
+    expect(sendRconCommandMock).not.toHaveBeenCalled();
+    // Still not "up" from lastKnownUp's perspective until it's actually healthy.
+    expect(updateStateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ lastKnownUp: true, statusMessageId: "existing-id" }),
+    );
   });
 
   it("edits the existing message in place rather than sending a new one when one already exists", async () => {
@@ -97,10 +117,10 @@ describe("runHeartbeatCheck", () => {
     await runHeartbeatCheck(client);
 
     expect(editMock).toHaveBeenCalled();
-    expect(statusChannel.send).not.toHaveBeenCalledWith(expect.stringContaining("offline"));
+    expect(statusChannel.send).not.toHaveBeenCalled();
   });
 
-  it("does not touch Discord or the state store on a second check with no transition and unchanged content", async () => {
+  it("does not touch Discord or the state store on a second check with no change in content", async () => {
     serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
     getStateMock.mockResolvedValue({ lastKnownUp: false, statusMessageId: "existing-id", serverStartedAt: null });
     statusChannel.messages.fetch.mockResolvedValue({ edit: vi.fn().mockResolvedValue(undefined) });
@@ -117,8 +137,11 @@ describe("runHeartbeatCheck", () => {
     expect(updateStateMock).not.toHaveBeenCalled();
   });
 
-  it("still updates when content changes even without a running-state transition (e.g. player count)", async () => {
-    serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: true, state: "running" } });
+  it("still updates when content changes even without an offline/online transition (e.g. player count)", async () => {
+    serverControlStatusMock.mockResolvedValue({
+      ok: true,
+      status: { running: true, state: "running", health: "healthy" },
+    });
     getStateMock.mockResolvedValue({
       lastKnownUp: true,
       statusMessageId: "existing-id",
@@ -136,25 +159,27 @@ describe("runHeartbeatCheck", () => {
     expect(editMock).toHaveBeenCalledTimes(2);
   });
 
-  it("serializes concurrent checks so a transition is announced and the message upserted only once", async () => {
+  it("serializes concurrent checks so the message is upserted only once", async () => {
     // Stateful mocks (not static return values) -- this is what actually exercises
     // the race: without serialization, two overlapping calls would both read the
-    // same starting state (statusMessageId: null, lastKnownUp: false) before either
-    // write lands, both announcing the transition and both sending a new message.
+    // same starting state (statusMessageId: null) before either write lands, and
+    // both would send a new message instead of one editing the other's.
     let persisted = { lastKnownUp: false, statusMessageId: null as string | null, serverStartedAt: null as string | null };
     getStateMock.mockImplementation(() => Promise.resolve({ ...persisted }));
     updateStateMock.mockImplementation((partial: Partial<typeof persisted>) => {
       persisted = { ...persisted, ...partial };
       return Promise.resolve(persisted);
     });
-    serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: true, state: "running" } });
+    serverControlStatusMock.mockResolvedValue({
+      ok: true,
+      status: { running: true, state: "running", health: "healthy" },
+    });
     statusChannel.messages.fetch.mockImplementation((id: string) =>
       id === "new-message-id" ? Promise.resolve({ edit: vi.fn().mockResolvedValue(undefined) }) : Promise.reject(new Error("Unknown Message")),
     );
 
     await Promise.all([runHeartbeatCheck(client), runHeartbeatCheck(client)]);
 
-    expect(statusChannel.send).toHaveBeenCalledTimes(2); // one status message + one transition announcement
-    expect(statusChannel.send.mock.calls.filter((call) => /just came online/.test(String(call[0]))).length).toBe(1);
+    expect(statusChannel.send).toHaveBeenCalledTimes(1);
   });
 });
