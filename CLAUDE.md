@@ -17,27 +17,32 @@ Two things are being built at once:
                                   |
                      +------------------------+
                      |   Oracle Cloud (OCI)   |  Always Free tier
-                     |  single VCN, 2 subnets |
+                     |  single VCN, 1 subnet  |
                      +------------------------+
-                        |                    |
-        +---------------+                    +---------------+
-        v                                                     v
- Bot VM (AMD E2.1.Micro, always on)              Game VM (Ampere A1, 2 OCPU/12GB, always on)
- - Discord bot (Node/TS, discord.js v14)          - Docker + Palworld dedicated server container
- - Slash commands, voice-presence watcher         - RCON on private-subnet-only port
- - Status heartbeat + 48h lifecycle manager       - palworld-ctl wrapper (forced-command SSH)
- - JSON state file (start time, msg ids)          - Block Volume mounted for world save
-        |                                                     |
-        +---------- SSH (forced command) + RCON -------------+
                                   |
+                                  v
+                  Game VM (Ampere A1, 2 OCPU/12GB, always on)
+                  - Docker + Palworld dedicated server container
+                  - Discord bot container (Node/TS, discord.js v14)
+                    - Slash commands, voice-presence watcher
+                    - Status heartbeat + 48h lifecycle manager
+                    - JSON state file (start time, msg ids)
+                  - Bot -> game server: SSH (forced command, loopback) + RCON (loopback)
+                  - palworld-ctl wrapper (forced-command SSH)
+                  - Block Volume mounted for world save
+                                  |
+                                  v
                          Object Storage bucket
                     (world backups + Terraform state)
 ```
 
+One VM, not two — see [`docs/decisions/005-consolidate-bot-onto-game-vm.md`](docs/decisions/005-consolidate-bot-onto-game-vm.md)
+for why the Discord bot runs as a second container here rather than on its own host.
+
 ### Key decisions (and why)
 
-- **Two always-on VMs, not stop/start of the game VM.** Ampere A1 and the AMD micro shape are both Always Free regardless of uptime, so there's no cost benefit to stopping the VM itself — only to stopping the *game process*. Automating OCI instance lifecycle (start/stop) adds fragile API surface for no savings; the bot must stay reachable to run `/server start` even when the game is fully down. **Only the Docker container is started/stopped, never the VM.**
-- **SSH with a forced command, not a custom HTTP control-agent.** The bot's SSH key is restricted via `authorized_keys` `command=` on the game VM to only execute `/usr/local/bin/palworld-ctl {start|stop|status}` — no interactive shell. Least-privilege by construction, and there's no bespoke API surface to secure or maintain.
+- **One always-on VM, not stop/start of the game VM.** Ampere A1 is Always Free regardless of uptime, so there's no cost benefit to stopping the VM itself — only to stopping the *game process*. Automating OCI instance lifecycle (start/stop) adds fragile API surface for no savings; the bot must stay reachable to run `/server start` even when the game is fully down — which it is, since only the Palworld container is ever started/stopped, never the VM, and the bot's own container runs independently of the Palworld container's state. **Only the Palworld Docker container is started/stopped, never the VM or the bot's container.**
+- **SSH with a forced command, not a custom HTTP control-agent.** The bot's SSH key is restricted via `authorized_keys` `command=` on the game VM to only execute `/usr/local/bin/palworld-ctl {start|stop|status}` — no interactive shell. Least-privilege by construction, and there's no bespoke API surface to secure or maintain. This holds even with the bot co-located on the same VM: it still authenticates over SSH as a distinct, single-purpose principal (over loopback now, not a second host) rather than being handed direct Docker/host access.
 - **RCON `Shutdown <seconds> <message>` drives the 48h restart countdown**, not a bot-side broadcast loop. Palworld's dedicated server natively announces countdown warnings in-game when shutdown is triggered via RCON with a delay; the bot mirrors the same message into Discord instead of re-implementing countdown timing. Verify exact in-game text/interval behavior against the running server build before relying on it — Palworld's RCON message handling has had version-dependent quirks (e.g. spaces in broadcast text).
 - **Palworld image: `thijsvanloef/palworld-server-docker`.** Actively maintained, RCON support, env-driven config, community-server mode. Don't build a custom image unless this one is proven insufficient.
 - **JSON state file, not SQLite**, for the bot's persisted state (server start timestamp, status message ID, last known up/down). A handful of low-write-frequency fields don't justify a compiled native dependency. Revisit only if state actually grows past simple key/value facts.

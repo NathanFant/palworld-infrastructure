@@ -1,10 +1,13 @@
 #cloud-config
-# User-data for the Ampere A1 game VM. Rendered via Terraform's templatefile() in the
-# Terraform game-VM ticket, which supplies ${palworld_bot_ssh_public_key} — the public
-# half of a dedicated keypair generated for the bot's SSH access (see README.md in
-# this directory for the generation/injection flow). This file only prepares the
-# environment (Docker, mount, control user, hardening); the actual Palworld
-# docker-compose.yml is deployed separately by scripts/deploy.sh (Phase 2/later).
+# User-data for the Ampere A1 game VM -- the only VM in this project (see
+# docs/decisions/005-consolidate-bot-onto-game-vm.md for why the Discord bot runs
+# here too, as a second Docker container, rather than on its own host). Rendered via
+# Terraform's templatefile() in the Terraform game-VM ticket, which supplies
+# ${palworld_bot_ssh_public_key} — the public half of a dedicated keypair generated
+# for the bot's forced-command SSH access (see README.md in this directory for the
+# generation/injection flow). This file only prepares the environment (Docker, mount,
+# control users, hardening); the actual Palworld and Discord bot docker-compose.yml
+# files are deployed separately by scripts/deploy.sh / scripts/deploy-bot.sh.
 
 package_update: true
 package_upgrade: true
@@ -28,9 +31,17 @@ users:
     shell: /bin/bash
     lock_passwd: true
     # command= restricts this key to ONLY run palworld-ctl, with whatever subcommand
-    # the bot sent, no interactive shell — see README.md for the full rationale.
+    # the bot sent, no interactive shell — see README.md for the full rationale. Kept
+    # as a single-purpose account deliberately separate from the "bot" user below,
+    # even though both now live on the same VM -- this one's only capability is the
+    # forced-command SSH shim, nothing else.
     ssh_authorized_keys:
       - 'command="/usr/local/bin/palworld-ctl $SSH_ORIGINAL_COMMAND",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ${palworld_bot_ssh_public_key}'
+  - name: bot
+    gecos: "Runs the Discord bot container"
+    groups: [docker]
+    shell: /bin/bash
+    lock_passwd: true
 
 write_files:
   - path: /usr/local/bin/palworld-ctl
@@ -168,6 +179,10 @@ runcmd:
   # --- Palworld deploy target directory (compose file itself deployed separately) ---
   - mkdir -p /opt/palworld
   - chown palworld-bot:docker /opt/palworld /mnt/palworld-data
+
+  # --- Discord bot deploy target + persistent state directory ---
+  - mkdir -p /opt/palworld-bot /opt/palworld-bot/data
+  - chown bot:docker /opt/palworld-bot /opt/palworld-bot/data
 
   # --- mcrcon: RCON client backup.sh uses to trigger a Save before snapshotting ---
   # (docker/compose.yml already publishes RCON to the host, so this connects to

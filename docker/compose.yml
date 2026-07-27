@@ -51,13 +51,12 @@ services:
       UPDATE_ON_BOOT: "true"
     ports:
       - "${PALWORLD_PUBLIC_PORT:-8211}:${PALWORLD_PUBLIC_PORT:-8211}/udp"
-      # RCON must be published to the host — the bot connects from an entirely
-      # separate VM, and Docker's default bridge network isn't reachable from
-      # outside the host at all unless a port is published. Safety here comes from
-      # a different layer, not from omitting this: infrastructure/terraform/
-      # compute-bot.tf's cross-NSG rule means only the bot VM's NSG can even reach
-      # this host's RCON port on the network in the first place (same
-      # defense-in-depth pattern as the admin-only-restricted SSH port).
-      - "${RCON_PORT:-25575}:${RCON_PORT:-25575}/tcp"
+      # RCON is bound to loopback only (127.0.0.1), not 0.0.0.0 -- the Discord bot
+      # runs as a second container on this same VM (network_mode: host, see
+      # discord-bot/docker-compose.yml) and reaches this port over the host's own
+      # loopback interface, which never touches the VCN's network fabric at all.
+      # Nothing outside this one host has ever needed RCON since the bot was
+      # consolidated onto the game VM (docs/decisions/005-consolidate-bot-onto-game-vm.md).
+      - "127.0.0.1:${RCON_PORT:-25575}:${RCON_PORT:-25575}/tcp"
     volumes:
       - /mnt/palworld-data:/palworld

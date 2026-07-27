@@ -11,10 +11,10 @@ data "oci_core_images" "ubuntu_arm" {
   sort_order               = "DESC"
 }
 
-# Empty membership container — the bot VM's NSG (ticket #10) gets a cross-NSG security
-# rule added here once it exists, replacing network.tf's current subnet-CIDR-scoped
-# RCON rule with true instance-level scoping (see issue #9/#10 follow-up discussion
-# from PR #15's review).
+# No rules attached -- RCON no longer needs network-level scoping at all now that the
+# Discord bot runs as a second container on this same VM and reaches it over loopback
+# (see docs/decisions/005-consolidate-bot-onto-game-vm.md). Kept as an attachment
+# point on the instance's VNIC for any future NSG-level rules.
 resource "oci_core_network_security_group" "game" {
   compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.main.id

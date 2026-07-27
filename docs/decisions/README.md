@@ -9,3 +9,4 @@ Each ADR follows the same shape: **Decision**, **Alternatives considered**, **Re
 - [002 — Why Docker for the Palworld server](002-why-docker.md)
 - [003 — Backup strategy](003-backup-strategy.md)
 - [004 — Discord-triggered lifecycle, not always-on](004-discord-triggering.md)
+- [005 — Consolidate the Discord bot onto the game VM](005-consolidate-bot-onto-game-vm.md)

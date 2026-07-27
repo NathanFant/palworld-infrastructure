@@ -2,10 +2,11 @@
 
 ## Decision
 
-Keep both VMs always on (they're free regardless of uptime), but only start/stop the Palworld Docker *container*
-on the game VM — triggered by a Discord slash command (`/server start|stop|restart`) or observed manually via a
+Keep the game VM always on (it's free regardless of uptime), but only start/stop the Palworld Docker *container*
+running on it — triggered by a Discord slash command (`/server start|stop|restart`) or observed manually via a
 voice-channel presence watcher, rather than running the game process continuously or auto-starting it from voice
-activity.
+activity. The Discord bot's own container runs continuously alongside it, unaffected by whether the Palworld
+container is currently up (see [`005-consolidate-bot-onto-game-vm.md`](005-consolidate-bot-onto-game-vm.md)).
 
 ## Alternatives considered
 
