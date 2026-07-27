@@ -1,0 +1,45 @@
+# Copy to terraform.tfvars and fill in real values. terraform.tfvars is gitignored —
+# never commit it.
+
+# From Contabo's Customer Control Panel -> Account Security.
+contabo_oauth2_client_id     = "INT-00000000"
+contabo_oauth2_client_secret = "REPLACE_WITH_REAL_CLIENT_SECRET"
+contabo_oauth2_user          = "you@example.com"
+contabo_oauth2_pass          = "REPLACE_WITH_REAL_API_PASSWORD" # a separate password you set in Account Security, not your login password
+
+# Product ID for the plan you ordered. There's no products-catalog endpoint to browse
+# this from ahead of time -- Contabo's API only reports it back once an instance
+# actually exists (GET /v1/compute/instances). This project's own "Cloud VPS 6
+# (2026)" plan (6 vCPU/12GB/200GB) resolved to "V154" -- likely still correct for the
+# same plan, but don't assume it matches whatever you ordered without checking.
+product_id = "REPLACE_WITH_REAL_PRODUCT_ID"
+region     = "US-central" # or "EU" (free/default), "US-east", "US-west", "SIN"
+
+# Public half of a dedicated admin keypair (e.g. `ssh-keygen -t ed25519 -f
+# ~/.oci/palworld-admin-key`) -- can be the same key already used for the Oracle VM,
+# or a fresh one. This one gets a real shell.
+admin_ssh_public_key = "ssh-ed25519 AAAA...REPLACE_WITH_REAL_PUBLIC_KEY... palworld-admin"
+
+# Set this to your own IP, e.g. "203.0.113.4/32" — never leave it as 0.0.0.0/0.
+admin_ssh_cidr = "203.0.113.4/32"
+
+# Public half of the dedicated keypair from `ssh-keygen -t ed25519 -f palworld-bot-key`
+# (see infrastructure/cloud-init/README.md) -- same key already used on the Oracle VM.
+palworld_bot_ssh_public_key = "ssh-ed25519 AAAA...REPLACE_WITH_REAL_PUBLIC_KEY... palworld-discord-bot"
+
+# palworld_port, palworld_query_port, rcon_port, image_id all have sensible defaults
+# (see variables.tf) — only override if you need something non-standard.
+
+# --- Backups/state stay on Oracle Object Storage -- see
+# docs/decisions/006-migrate-to-contabo.md. Only the secret credential itself needs
+# to be set here -- namespace/bucket/region are plain config that already flow to
+# the VM via scripts/deploy.sh's normal .env render, not through Terraform. ---
+#
+# A dedicated, least-privileged OCI user/Customer Secret Key, scoped to only the
+# backup bucket -- see infrastructure/terraform/backup-service-account.tf. Get these
+# via `terraform output backup_service_access_key` / `terraform output -raw
+# backup_service_secret_key` in that directory, once applied. Deliberately NOT a key
+# belonging to the general admin/Terraform user (a Customer Secret Key inherits its
+# user's full permissions).
+oracle_backup_access_key = "REPLACE_WITH_REAL_ACCESS_KEY"
+oracle_backup_secret_key = "REPLACE_WITH_REAL_SECRET_KEY"

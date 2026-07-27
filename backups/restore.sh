@@ -31,16 +31,19 @@ env_get() {
 
 BUCKET="$(env_get OCI_BACKUP_BUCKET_NAME)"
 NAMESPACE="$(env_get OCI_BACKUP_NAMESPACE)"
+REGION="$(env_get OCI_BACKUP_REGION)"
 WORLD_DATA_DIR=/mnt/palworld-data
 STAGING_DIR="/tmp/palworld-restore-$(date -u +%Y%m%dT%H%M%SZ)"
 
 mkdir -p "${STAGING_DIR}"
 
-oci --auth instance_principal os object get \
-  --bucket-name "${BUCKET}" \
-  --namespace "${NAMESPACE}" \
-  --name "${TIER}/${OBJECT_NAME}" \
-  --file "${STAGING_DIR}/backup.tar.gz"
+# Same static Customer Secret Key auth as backup.sh -- see its comment for why.
+aws --profile oci-backup \
+  --endpoint-url "https://${NAMESPACE}.compat.objectstorage.${REGION}.oraclecloud.com" \
+  s3api get-object \
+  --bucket "${BUCKET}" \
+  --key "${TIER}/${OBJECT_NAME}" \
+  "${STAGING_DIR}/backup.tar.gz"
 
 tar -xzf "${STAGING_DIR}/backup.tar.gz" -C "${STAGING_DIR}"
 

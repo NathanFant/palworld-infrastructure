@@ -1,0 +1,18 @@
+# Copy to backend.hcl (gitignored) and fill in real values. Used as:
+#   terraform init -backend-config=backend.hcl
+#
+# Deliberately the SAME Oracle Object Storage bucket the sibling
+# infrastructure/terraform directory's state lives in (see
+# docs/decisions/006-migrate-to-contabo.md for why storage/state stay on Oracle even
+# though compute moves to Contabo) -- only `key` differs, so the two directories'
+# state files sit side by side in the same bucket without colliding. Every other
+# value here is identical to infrastructure/terraform/backend.hcl's.
+
+bucket           = "palworld-tfstate"
+namespace        = "<namespace, from terraform-bootstrap's output -- same as the sibling directory's>"
+key              = "palworld-infrastructure-contabo/terraform.tfstate"
+region           = "us-ashburn-1"
+tenancy_ocid     = "ocid1.tenancy.oc1..exampleuniqueID"
+user_ocid        = "ocid1.user.oc1..exampleuniqueID"
+fingerprint      = "aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"
+private_key_path = "~/.oci/oci_api_key.pem"

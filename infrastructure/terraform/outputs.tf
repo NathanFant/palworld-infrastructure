@@ -32,3 +32,16 @@ output "game_vm_private_ip" {
 output "game_nsg_id" {
   value = oci_core_network_security_group.game.id
 }
+
+# Feeds infrastructure/terraform-contabo's oracle_backup_access_key/
+# oracle_backup_secret_key variables -- see backup-service-account.tf. Marked
+# sensitive so a plain `terraform output` doesn't print it; use `terraform output
+# -raw backup_service_secret_key` to actually retrieve it.
+output "backup_service_access_key" {
+  value = oci_identity_customer_secret_key.backup_service.id
+}
+
+output "backup_service_secret_key" {
+  value     = oci_identity_customer_secret_key.backup_service.key
+  sensitive = true
+}

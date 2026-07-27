@@ -25,6 +25,7 @@ jobs:
         root_module:
           - infrastructure/terraform
           - infrastructure/terraform-bootstrap
+          - infrastructure/terraform-contabo
     defaults:
       run:
         working-directory: ${{ matrix.root_module }}
