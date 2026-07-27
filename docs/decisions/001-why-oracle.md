@@ -2,9 +2,11 @@
 
 ## Decision
 
-Host on Oracle Cloud Infrastructure's Always Free tier: an Ampere A1.Flex instance (2 OCPU / 12GB, ARM — see the
-2026-07-24 update below) for the game server and a VM.Standard.E2.1.Micro instance (AMD) for the Discord bot, both
-provisioned via Terraform.
+Host on Oracle Cloud Infrastructure's Always Free tier: a single Ampere A1.Flex instance (2 OCPU / 12GB, ARM — see
+the 2026-07-24 update below), provisioned via Terraform, running both the Palworld game server and the Discord bot
+as separate Docker containers. (Originally provisioned as two instances — a second `VM.Standard.E2.1.Micro` for the
+bot — until Oracle capacity for that shape proved unavailable for days; see
+[`005-consolidate-bot-onto-game-vm.md`](005-consolidate-bot-onto-game-vm.md) for why one VM replaced two.)
 
 ## Alternatives considered
 

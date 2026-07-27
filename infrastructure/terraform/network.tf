@@ -1,7 +1,10 @@
-# Single VCN, single public subnet — both VMs are always-on and need inbound access
-# (SSH for admins, the game port for players, RCON for the bot), so there's no
-# meaningful isolation win from splitting public/private subnets for a 2-host, 3-player
-# project. See CLAUDE.md for why both VMs stay always-on rather than being stopped.
+# Single VCN, single public subnet — the one VM is always-on and needs inbound access
+# (SSH for admins, the game port for players), so there's no meaningful isolation win
+# from splitting public/private subnets for a 1-host, 3-player project. See CLAUDE.md
+# for why the VM stays always-on rather than being stopped. RCON needs no ingress rule
+# at all: the Discord bot runs as a second container on this same host and reaches it
+# over loopback (docker/compose.yml publishes RCON to 127.0.0.1 only), never crossing
+# the VCN's network fabric.
 
 resource "oci_core_vcn" "main" {
   compartment_id = var.compartment_ocid
@@ -29,11 +32,12 @@ resource "oci_core_route_table" "public" {
   }
 }
 
-# RCON is intentionally NOT in this security list — it's scoped at the instance level
-# via a cross-NSG rule in compute-bot.tf (oci_core_network_security_group_security_rule),
-# restricting it to traffic from the bot VM's NSG specifically, not the whole subnet.
-# This replaced an earlier subnet-CIDR-based rule once the bot VM (and its NSG) existed
-# to reference — see the review discussion on issues #9/#10.
+# RCON is intentionally NOT in this security list at all — since the Discord bot was
+# consolidated onto this same VM (issue #65), RCON is only ever reached over loopback
+# (docker/compose.yml publishes it to 127.0.0.1 only), which never touches the VCN's
+# network fabric or NSG/security-list filtering in the first place. Earlier revisions
+# scoped this via a cross-NSG rule to a separate bot VM's NSG; see
+# docs/decisions/005-consolidate-bot-onto-game-vm.md for why that's gone.
 resource "oci_core_security_list" "main" {
   compartment_id = var.compartment_ocid
   vcn_id         = oci_core_vcn.main.id

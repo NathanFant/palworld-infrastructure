@@ -2,22 +2,23 @@
 
 ## Symptom
 
-`terraform apply` in `infrastructure/terraform` fails on `oci_core_instance.game` and/or
-`oci_core_instance.bot` with one of:
+`terraform apply` in `infrastructure/terraform` fails on `oci_core_instance.game` with:
 
-- `500-InternalError, Out of host capacity.` (typically the Ampere A1 game VM)
-- `404-NotAuthorizedOrNotFound, Authorization failed or requested resource not found.`
-  when it's actually the AMD E2.1.Micro bot VM failing — Oracle labels this shape's
-  capacity exhaustion misleadingly as an auth error rather than a clear capacity error.
-  This is a known, widely-reported quirk specific to `VM.Standard.E2.1.Micro`, not a
-  real permissions problem, **provided** you've already confirmed (see below) that
-  `admin_ssh_cidr`, `availability_domain_index`, and IAM policies are all correct.
+```
+500-InternalError, Out of host capacity.
+```
+
+(This project only provisions one instance now — the Ampere A1 game VM, which also
+runs the Discord bot as a second container. See
+[`docs/decisions/005-consolidate-bot-onto-game-vm.md`](../decisions/005-consolidate-bot-onto-game-vm.md)
+for why there's no longer a separate bot VM shape to troubleshoot here.)
 
 ## Cause
 
-Always Free tier capacity for both shapes is genuinely scarce and shared across all
-Oracle customers in a region/availability domain. This is not a bug in this repo's
-Terraform — it's Oracle not having free spare capacity available right now.
+Always Free tier capacity for the Ampere A1 shape is genuinely scarce and shared
+across all Oracle customers in a region/availability domain. This is not a bug in
+this repo's Terraform — it's Oracle not having free spare capacity available right
+now.
 
 ## How to tell this apart from a real config bug
 
@@ -25,7 +26,7 @@ Before assuming it's just capacity:
 - Confirm `availability_domain_index` in `terraform.tfvars` points at the AD your
   tenancy actually has Always Free entitlement in (OCI console: **Governance ->
   Limits, Quotas and Usage -> Compute**, cycle the AD dropdown, look for a non-zero
-  limit for `VM.Standard.A1.Flex` / `VM.Standard.E2.1.Micro`).
+  limit for `VM.Standard.A1.Flex`).
 - Confirm `terraform plan` shows only the expected resources with no unexpected
   diffs.
 - Confirm `game_vm_ocpus`/`game_vm_memory_gb` (`infrastructure/terraform/variables.tf`)
@@ -35,12 +36,14 @@ Before assuming it's just capacity:
   for the full investigation) with no public announcement — a request that exceeds
   your tenancy's actual current limit is a real possibility worth ruling out, and
   some reports describe Oracle surfacing that as the same generic
-  `Out of host capacity` error rather than a distinct quota error. If you've been
-  retrying against the old 4/24 default, this alone could be the entire cause —
-  it's worth updating to the new default and retrying before assuming it's pure
-  regional scarcity.
+  `Out of host capacity` error rather than a distinct quota error.
 
-If those check out and you're still seeing the errors above, it's capacity.
+If those check out and you're still seeing the error above, it's capacity. A
+temporary, read-only Terraform data source query against this tenancy's actual OCI
+service limits (see `docs/decisions/005-consolidate-bot-onto-game-vm.md`'s context
+section for how) is a reliable way to confirm your tenancy's real entitlement for a
+given shape/AD combination if you want certainty rather than inference from the error
+message alone.
 
 ## Fix
 

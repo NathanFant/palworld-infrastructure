@@ -37,18 +37,18 @@ variable "vcn_cidr" {
 }
 
 variable "subnet_cidr" {
-  description = "CIDR block for the single public subnet both VMs live in."
+  description = "CIDR block for the single public subnet the game VM lives in."
   type        = string
   default     = "10.0.1.0/24"
 }
 
 variable "admin_ssh_cidr" {
-  description = "CIDR allowed to SSH into either VM (port 22). No default — must be set explicitly to your own IP/32, never left open to 0.0.0.0/0."
+  description = "CIDR allowed to SSH into the game VM (port 22). No default — must be set explicitly to your own IP/32, never left open to 0.0.0.0/0."
   type        = string
 }
 
 variable "admin_ssh_public_key" {
-  description = "Public half of a dedicated admin keypair, injected into both VMs' default-user authorized_keys via instance metadata. Separate from the OCI API key (Terraform/provider auth) and the bot's forced-command-restricted key (infrastructure/cloud-init) — this one gets a real shell. Only read by cloud-init at first boot: changing this and re-applying against an already-launched instance has no effect until it's destroyed and recreated."
+  description = "Public half of a dedicated admin keypair, injected into the game VM's default-user authorized_keys via instance metadata. Separate from the OCI API key (Terraform/provider auth) and the bot's forced-command-restricted key (infrastructure/cloud-init) — this one gets a real shell. Only read by cloud-init at first boot: changing this and re-applying against an already-launched instance has no effect until it's destroyed and recreated."
   type        = string
 }
 
@@ -59,7 +59,7 @@ variable "palworld_port" {
 }
 
 variable "rcon_port" {
-  description = "TCP port Palworld's RCON listens on. Restricted to the subnet CIDR, not the public internet — see network.tf for why a subnet-wide restriction is used instead of a single-host /32."
+  description = "TCP port Palworld's RCON listens on. Not present in the security list or any NSG rule at all -- docker/compose.yml publishes it to 127.0.0.1 only, since the Discord bot runs as a second container on this same VM and reaches it over loopback (see docs/decisions/005-consolidate-bot-onto-game-vm.md)."
   type        = number
   default     = 25575
 }
@@ -105,12 +105,12 @@ variable "backup_retention_monthly_days" {
 
 variable "availability_domain_index" {
   description = <<-EOT
-    Index into data.oci_identity_availability_domains.ads.availability_domains for both
-    VMs. Always Free shapes (both E2.1.Micro and A1.Flex) are only available in ONE
-    specific availability domain per tenancy in multi-AD regions — NOT necessarily
-    index 0. Find yours via the OCI console: Governance -> Limits, Quotas and Usage ->
-    Compute -> cycle the Availability Domain dropdown until VM.Standard.A1.Flex /
-    VM.Standard.E2.1.Micro show a non-zero limit.
+    Index into data.oci_identity_availability_domains.ads.availability_domains for the
+    game VM. The Always Free A1.Flex shape is only available in ONE specific
+    availability domain per tenancy in multi-AD regions — NOT necessarily index 0.
+    Find yours via the OCI console: Governance -> Limits, Quotas and Usage -> Compute
+    -> cycle the Availability Domain dropdown until VM.Standard.A1.Flex shows a
+    non-zero limit.
   EOT
   type        = number
   default     = 0
