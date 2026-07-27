@@ -97,6 +97,7 @@ describe("runHeartbeatCheck", () => {
 
     expect(editMock).toHaveBeenCalledWith(expect.stringContaining("online"));
     expect(editMock).toHaveBeenCalledWith(expect.stringContaining("Connect: 203.0.113.10:8211 (password: apex)"));
+    expect(message.pin).toHaveBeenCalled();
     expect(statusChannel.send).not.toHaveBeenCalled();
     expect(updateStateMock).toHaveBeenCalledWith(
       expect.objectContaining({ lastKnownUp: true, statusMessageId: "existing-id" }),
