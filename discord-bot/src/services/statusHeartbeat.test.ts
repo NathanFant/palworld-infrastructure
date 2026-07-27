@@ -180,6 +180,33 @@ describe("runHeartbeatCheck", () => {
     expect(updateStateMock).not.toHaveBeenCalled();
   });
 
+  it("persists a freshly backfilled serverStartedAt even when the rendered content is unchanged from the last tick", async () => {
+    // The "starting" render text never includes serverStartedAt at all -- so if
+    // state.serverStartedAt resets to null (e.g. a stale/reset state file) on a
+    // tick where the status is still "starting", the rendered content is byte-
+    // identical to the previous tick's, even though a fresh backfill just happened.
+    // A content-diff-only skip check would silently drop that backfilled value
+    // without ever persisting it.
+    serverControlStatusMock.mockResolvedValue({
+      ok: true,
+      status: { running: true, state: "running", health: "starting" },
+    });
+    statusChannel.messages.fetch.mockResolvedValue(fakeMessage());
+
+    getStateMock.mockResolvedValueOnce({ statusMessageId: "existing-id", serverStartedAt: "2026-01-01T00:00:00.000Z" });
+    await runHeartbeatCheck(client); // first check: establishes lastRenderedContent
+    updateStateMock.mockClear();
+
+    getStateMock.mockResolvedValueOnce({ statusMessageId: "existing-id", serverStartedAt: null });
+    await runHeartbeatCheck(client); // second check: identical rendered content, but serverStartedAt reset to null
+
+    expect(updateStateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ serverStartedAt: expect.any(String) }),
+    );
+    const [{ serverStartedAt }] = updateStateMock.mock.calls[0];
+    expect(serverStartedAt).not.toBeNull();
+  });
+
   it("edits the existing message in place rather than sending a new one when one already exists", async () => {
     const editMock = vi.fn().mockResolvedValue(undefined);
     statusChannel.messages.fetch.mockResolvedValue(fakeMessage({ edit: editMock }));
