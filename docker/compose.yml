@@ -60,6 +60,17 @@ services:
       # independent of player count (see issue #89).
       ENABLE_INVADER_ENEMY: "false"
 
+      # Both of these default to unlimited (-1 / 0) -- generous headroom is fine,
+      # but leaving them genuinely uncapped means nothing stops a future source of
+      # item/building bloat from recreating the same memory-pressure problem
+      # invader raids and an oversized pal population already caused (see #89).
+      # These caps are well above anything a 3-person server should ever need.
+      PHYSICS_ACTIVE_DROP_ITEM_MAX_NUM: "100"
+      MAX_BUILDING_LIMIT_NUM: "3000"
+      # Default (3000) is generous for a 3-person server; lowered as a cheap,
+      # unlikely-to-be-felt trim on top of the caps above.
+      DROP_ITEM_MAX_NUM: "750"
+
       UPDATE_ON_BOOT: "true"
     ports:
       - "${PALWORLD_PUBLIC_PORT:-8211}:${PALWORLD_PUBLIC_PORT:-8211}/udp"
