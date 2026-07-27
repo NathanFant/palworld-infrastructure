@@ -25,6 +25,7 @@ describe("stateStore", () => {
       voicePresenceMessageId: null,
       lastKnownUp: false,
       restartTriggeredAt: null,
+      idleSince: null,
     });
   });
 
@@ -84,6 +85,7 @@ describe("stateStore", () => {
       voicePresenceMessageId: null,
       serverStartedAt: "2026-01-01T00:00:00Z",
       restartTriggeredAt: null,
+      idleSince: null,
     });
   });
 
@@ -111,6 +113,7 @@ describe("stateStore", () => {
         voicePresenceMessageId: null,
         lastKnownUp: false,
         restartTriggeredAt: null,
+        idleSince: null,
       }),
     );
     const state = await updateState({ lastKnownUp: true }, badPath);

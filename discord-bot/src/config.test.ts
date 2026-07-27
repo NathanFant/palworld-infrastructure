@@ -64,4 +64,20 @@ describe("config", () => {
     expect(config.gameVm.sshPort).toBe(22);
     expect(config.lifecycle.restartIntervalHours).toBe(48);
   });
+
+  it("defaults idle-shutdown to disabled with a 15-minute threshold", async () => {
+    stubAllRequired();
+    vi.stubEnv("IDLE_SHUTDOWN_ENABLED", "");
+    vi.stubEnv("IDLE_SHUTDOWN_MINUTES", "");
+    const { config } = await importConfig();
+    expect(config.lifecycle.idleShutdownEnabled).toBe(false);
+    expect(config.lifecycle.idleShutdownMinutes).toBe(15);
+  });
+
+  it("enables idle-shutdown only when explicitly set to the literal string 'true'", async () => {
+    stubAllRequired();
+    vi.stubEnv("IDLE_SHUTDOWN_ENABLED", "true");
+    const { config } = await importConfig();
+    expect(config.lifecycle.idleShutdownEnabled).toBe(true);
+  });
 });

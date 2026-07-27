@@ -82,5 +82,10 @@ export const config = {
     // location) -- in production that's the container's WORKDIR with a mounted
     // volume; in local dev, wherever `npm run dev` was invoked from.
     stateFilePath: path.resolve(optional("BOT_STATE_FILE_PATH", "./data/state.json")),
+    // Off by default -- deliberately: shipping this disabled lets the feature be
+    // deployed ("prepped") without changing live server behavior until explicitly
+    // flipped on (e.g. at the next planned restart), per how it was requested.
+    idleShutdownEnabled: optional("IDLE_SHUTDOWN_ENABLED", "false") === "true",
+    idleShutdownMinutes: Number(optional("IDLE_SHUTDOWN_MINUTES", "15")),
   },
 } as const;

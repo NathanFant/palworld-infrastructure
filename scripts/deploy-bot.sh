@@ -98,6 +98,8 @@ chmod 600 "${RENDERED_ENV}"
   echo "PALWORLD_PUBLIC_PORT=$(env_get PALWORLD_PUBLIC_PORT)"
   echo "PALWORLD_SERVER_PASSWORD=$(env_get PALWORLD_SERVER_PASSWORD)"
   echo "SERVER_RESTART_INTERVAL_HOURS=$(env_get SERVER_RESTART_INTERVAL_HOURS)"
+  echo "IDLE_SHUTDOWN_ENABLED=$(env_get IDLE_SHUTDOWN_ENABLED)"
+  echo "IDLE_SHUTDOWN_MINUTES=$(env_get IDLE_SHUTDOWN_MINUTES)"
   # Same reasoning again -- always the fixed in-container path the compose file's
   # ./data:/app/data mount resolves to.
   echo "BOT_STATE_FILE_PATH=./data/state.json"

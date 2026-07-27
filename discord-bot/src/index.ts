@@ -4,9 +4,11 @@ import { commands } from "./commands/index.js";
 import { registerPresenceWatcher, renderPresence } from "./services/presenceWatcher.js";
 import { startStatusHeartbeat } from "./services/statusHeartbeat.js";
 import { startLifecycleManager } from "./services/lifecycleManager.js";
+import { startIdleShutdownManager } from "./services/idleShutdownManager.js";
 
 const STATUS_HEARTBEAT_INTERVAL_MS = 60_000;
 const LIFECYCLE_CHECK_INTERVAL_MS = 60_000;
+const IDLE_CHECK_INTERVAL_MS = 60_000;
 
 // Guilds: baseline, required for basic guild/channel caching to work at all.
 // GuildVoiceStates: needed for the presence watcher (Phase 5) to see voice-channel
@@ -28,6 +30,7 @@ client.once(Events.ClientReady, (readyClient) => {
   });
   startStatusHeartbeat(readyClient, STATUS_HEARTBEAT_INTERVAL_MS);
   startLifecycleManager(readyClient, LIFECYCLE_CHECK_INTERVAL_MS);
+  startIdleShutdownManager(readyClient, IDLE_CHECK_INTERVAL_MS);
 });
 
 client.on(Events.InteractionCreate, (interaction) => {

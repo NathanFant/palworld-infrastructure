@@ -1,5 +1,6 @@
 import { Client, Events } from "discord.js";
 import { config } from "../config.js";
+import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
 
 // Loosely typed on purpose (not discord.js's full VoiceState) so this can be unit
@@ -12,6 +13,13 @@ export interface VoiceStateLike {
 // least one side; moving between two other, unrelated channels touches neither.
 export function touchesWatchedChannel(oldState: VoiceStateLike, newState: VoiceStateLike): boolean {
   return oldState.channelId === config.discord.voiceChannelId || newState.channelId === config.discord.voiceChannelId;
+}
+
+// Narrower than touchesWatchedChannel: true only for an actual join into the
+// watched channel (from nothing, or moved in from elsewhere) -- a leave or an
+// unrelated move-out shouldn't ever auto-start the server.
+export function joinedWatchedChannel(oldState: VoiceStateLike, newState: VoiceStateLike): boolean {
+  return newState.channelId === config.discord.voiceChannelId && oldState.channelId !== config.discord.voiceChannelId;
 }
 
 export interface MemberLike {
@@ -76,13 +84,92 @@ export function renderPresence(client: Client<true>): Promise<void> {
   return task;
 }
 
+const AUTO_START_POLL_INTERVAL_MS = 5_000;
+const AUTO_START_POLL_TIMEOUT_MS = 3 * 60 * 1_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitUntilRunning(): Promise<boolean> {
+  const deadline = Date.now() + AUTO_START_POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const result = await serverControl.status();
+    if (result.ok && result.status?.running) {
+      return true;
+    }
+    await sleep(AUTO_START_POLL_INTERVAL_MS);
+  }
+  return false;
+}
+
+async function announce(client: Client<true>, content: string): Promise<void> {
+  const statusChannel = await client.channels.fetch(config.discord.statusChannelId);
+  if (statusChannel?.isSendable()) {
+    await statusChannel.send(content);
+  }
+}
+
+async function maybeAutoStartOnce(client: Client<true>): Promise<void> {
+  if (!config.lifecycle.idleShutdownEnabled) {
+    return;
+  }
+
+  const statusResult = await serverControl.status();
+  if (statusResult.ok && statusResult.status?.running) {
+    return; // already running (or already starting) -- nothing to do
+  }
+
+  await announce(client, "🟡 Someone joined voice -- starting the Palworld server...");
+
+  const startResult = await serverControl.start();
+  if (!startResult.ok) {
+    await announce(
+      client,
+      `Failed to auto-start the Palworld server: ${startResult.error ?? startResult.stderr ?? "unknown error"}`,
+    );
+    return;
+  }
+
+  const healthy = await waitUntilRunning();
+  if (!healthy) {
+    await announce(
+      client,
+      "Auto-start triggered, but the server didn't come up within the expected time. Check `/server status`.",
+    );
+    return;
+  }
+
+  await updateState({
+    serverStartedAt: new Date().toISOString(),
+    lastKnownUp: true,
+    restartTriggeredAt: null,
+    idleSince: null,
+  });
+  await announce(client, "🟢 The Palworld server is online.");
+}
+
+// Same write-queue pattern as renderQueue above -- two people joining voice within
+// the same tick shouldn't both fire serverControl.start().
+let autoStartQueue: Promise<unknown> = Promise.resolve();
+
+export function maybeAutoStart(client: Client<true>): Promise<void> {
+  const task = autoStartQueue.then(() => maybeAutoStartOnce(client));
+  autoStartQueue = task.catch(() => undefined);
+  return task;
+}
+
 export function registerPresenceWatcher(client: Client<true>): void {
   client.on(Events.VoiceStateUpdate, (oldState, newState) => {
-    if (!touchesWatchedChannel(oldState, newState)) {
-      return;
+    if (touchesWatchedChannel(oldState, newState)) {
+      renderPresence(client).catch((error: unknown) => {
+        console.error("Failed to update voice presence message:", error);
+      });
     }
-    renderPresence(client).catch((error: unknown) => {
-      console.error("Failed to update voice presence message:", error);
-    });
+    if (joinedWatchedChannel(oldState, newState)) {
+      maybeAutoStart(client).catch((error: unknown) => {
+        console.error("Failed to auto-start the server on voice join:", error);
+      });
+    }
   });
 }
