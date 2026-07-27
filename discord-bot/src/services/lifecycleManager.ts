@@ -38,7 +38,17 @@ async function checkRestartCompletion(client: Client<true>, restartTriggeredAt: 
     return; // past the expected window but not back up yet -- keep waiting
   }
 
-  await updateState({ serverStartedAt: new Date().toISOString(), restartTriggeredAt: null, lastKnownUp: true });
+  // idleSince cleared too, for the same reason commands/server.ts's manual
+  // start/stop/restart handlers clear it: a scheduled restart is just as much a
+  // fresh session as a manual one, and a stale idle timer surviving it could
+  // otherwise trigger an unwanted immediate auto-stop on the very next idle-check
+  // tick, before anyone's had a chance to reconnect.
+  await updateState({
+    serverStartedAt: new Date().toISOString(),
+    restartTriggeredAt: null,
+    lastKnownUp: true,
+    idleSince: null,
+  });
   await announce(client, "🟢 Scheduled restart complete -- the Palworld server is back online.");
 }
 

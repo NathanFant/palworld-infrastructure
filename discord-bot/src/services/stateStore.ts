@@ -16,6 +16,11 @@ export interface BotState {
    * window. Cleared once the restart cycle completes, or by any manual
    * /server start|stop|restart. */
   restartTriggeredAt: string | null;
+  /** Set the first time the idle-shutdown manager observes a running server with
+   * zero players; cleared as soon as a player is seen again or the server stops.
+   * Once (now - idleSince) exceeds config.lifecycle.idleShutdownMinutes, the server
+   * is auto-stopped. Null whenever idleness isn't currently being tracked. */
+  idleSince: string | null;
 }
 
 const DEFAULT_STATE: BotState = {
@@ -24,6 +29,7 @@ const DEFAULT_STATE: BotState = {
   voicePresenceMessageId: null,
   lastKnownUp: false,
   restartTriggeredAt: null,
+  idleSince: null,
 };
 
 function isBotState(value: unknown): value is BotState {
@@ -36,7 +42,8 @@ function isBotState(value: unknown): value is BotState {
     (typeof v.statusMessageId === "string" || v.statusMessageId === null) &&
     (typeof v.voicePresenceMessageId === "string" || v.voicePresenceMessageId === null) &&
     typeof v.lastKnownUp === "boolean" &&
-    (typeof v.restartTriggeredAt === "string" || v.restartTriggeredAt === null)
+    (typeof v.restartTriggeredAt === "string" || v.restartTriggeredAt === null) &&
+    (typeof v.idleSince === "string" || v.idleSince === null)
   );
 }
 

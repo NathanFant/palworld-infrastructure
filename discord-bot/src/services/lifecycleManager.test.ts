@@ -158,6 +158,7 @@ describe("runLifecycleCheck: detecting restart completion", () => {
       serverStartedAt: expect.any(String),
       restartTriggeredAt: null,
       lastKnownUp: true,
+      idleSince: null,
     });
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("restart complete"));
   });
