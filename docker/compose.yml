@@ -73,6 +73,20 @@ services:
       # unlikely-to-be-felt trim on top of the caps above.
       DROP_ITEM_MAX_NUM: "750"
 
+      # box64 (the x86-to-ARM64 JIT emulation layer this deployment needs, since
+      # Oracle's free-tier VM is ARM64 but Palworld's Linux server binary is
+      # x86-only) never reclaims memory from translated/compiled code blocks by
+      # default -- confirmed via a direct comparison: the same save runs fine
+      # natively (no emulation) on a 32GB machine, but hits severe swap thrashing
+      # here despite the same 32GB. For a long-running, code-diverse Unreal Engine
+      # process (many distinct pal/AI code paths), that unbounded translation
+      # cache is a plausible, mechanistically distinct memory sink from the game's
+      # own object/save data (see issue #93). This env var reaches box64 itself
+      # (not the Palworld game), since container env vars are inherited by every
+      # process the entrypoint eventually execs, including the box64-wrapped
+      # server binary.
+      BOX64_DYNAREC_PURGE: "1"
+
       UPDATE_ON_BOOT: "true"
     ports:
       - "${PALWORLD_PUBLIC_PORT:-8211}:${PALWORLD_PUBLIC_PORT:-8211}/udp"
