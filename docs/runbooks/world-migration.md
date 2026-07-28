@@ -73,6 +73,27 @@ ssh -i <admin-key> <ADMIN_SSH_USER>@<GAME_VM_HOST> '
 The `chown` to `1000:1000` matters — it must match `docker/compose.yml`'s
 `PUID`/`PGID`, or the container won't have permission to read/write the save.
 
+**If the source save was ever played on Windows** (including "host from save data"
+co-op via the base game), check for a `WorldOption.sav` in the copied folder and
+move it aside — don't delete it, just rename it out of the way (e.g. `mv
+WorldOption.sav WorldOption.sav.bak`):
+
+```
+ssh -i <admin-key> <ADMIN_SSH_USER>@<GAME_VM_HOST> '
+  sudo mv /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_2>/WorldOption.sav \
+    /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_2>/WorldOption.sav.bak
+'
+```
+
+A Windows-originated `WorldOption.sav` takes priority over `PalWorldSettings.ini`
+and silently blocks the server's settings — including `AdminPassword` — from
+applying, causing RCON and the REST API to fail with "AdminPassword is empty" even
+when the password is correct everywhere else. Verified directly against this
+project's own migration (issue #105); root cause and confirmed fix documented in
+[thijsvanloef/palworld-server-docker#886](https://github.com/thijsvanloef/palworld-server-docker/issues/886),
+with an upstream fix at
+[thijsvanloef/palworld-server-docker#910](https://github.com/thijsvanloef/palworld-server-docker/pull/910).
+
 ## 4. Verify
 
 1. Start the server again (`/server start` in Discord or `palworld-ctl start`
