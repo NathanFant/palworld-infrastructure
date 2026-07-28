@@ -19,6 +19,7 @@ resource "oci_identity_user" "backup_service" {
   compartment_id = var.tenancy_ocid # users are always created at the tenancy (root) level
   name           = "palworld-backup-service"
   description    = "Dedicated service account for the Contabo game VM's backup.sh/restore.sh Customer Secret Key. No other purpose -- do not add to any other group or policy."
+  email          = var.backup_service_email
 }
 
 resource "oci_identity_group" "backup_service" {

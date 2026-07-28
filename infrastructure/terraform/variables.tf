@@ -83,6 +83,11 @@ variable "backup_bucket_name" {
   default     = "palworld-backups"
 }
 
+variable "backup_service_email" {
+  description = "Email address for the dedicated palworld-backup-service user (backup-service-account.tf) -- OCI's identity domain requires a primary email on user creation. A plus-addressed variant of your own email (e.g. you+palworld-backup@example.com) works fine and still lands in your inbox; this account has no login/console access, the email is just satisfying OCI's user-record schema."
+  type        = string
+}
+
 variable "backup_retention_hourly_days" {
   description = "Expire objects under hourly/ after this many days (24 hourly backups ~= 1 day)."
   type        = number

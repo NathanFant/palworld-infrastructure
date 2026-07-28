@@ -28,5 +28,8 @@ resource "contabo_instance" "game" {
     palworld_bot_ssh_public_key = var.palworld_bot_ssh_public_key
     oracle_backup_access_key    = var.oracle_backup_access_key
     oracle_backup_secret_key    = var.oracle_backup_secret_key
+    admin_ssh_cidr              = var.admin_ssh_cidr
+    palworld_port               = var.palworld_port
+    palworld_query_port         = var.palworld_query_port
   })
 }

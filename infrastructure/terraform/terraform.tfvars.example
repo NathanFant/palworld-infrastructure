@@ -22,3 +22,8 @@ admin_ssh_public_key = "ssh-ed25519 AAAA...REPLACE_WITH_REAL_PUBLIC_KEY... palwo
 # Public half of the dedicated keypair from `ssh-keygen -t ed25519 -f palworld-bot-key`
 # (see infrastructure/cloud-init/README.md for the full generation/injection flow).
 palworld_bot_ssh_public_key = "ssh-ed25519 AAAA...REPLACE_WITH_REAL_PUBLIC_KEY... palworld-discord-bot"
+
+# OCI's identity domain requires a primary email on user creation for
+# backup-service-account.tf's dedicated service account -- it has no login/console
+# access, so any deliverable address works (a plus-addressed variant of your own is fine).
+backup_service_email = "you+palworld-backup@example.com"
