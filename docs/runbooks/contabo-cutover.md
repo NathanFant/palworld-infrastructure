@@ -171,9 +171,9 @@ Delete `.env.contabo.local` once the real `.env.local` is updated — it was onl
 
 ## 6. Only after Contabo has been stable for a while
 
-- Clean up `docker/compose.yml`: remove `ARM64_DEVICE` and all `BOX64_DYNAREC_*` settings (meaningless on native
-  x86). Keep the item/building count caps and invader-raids-disabled settings — those were sensible hygiene
-  independent of the ARM64/box64 problem, not part of the root cause.
+- ~~Clean up `docker/compose.yml`: remove all `BOX64_DYNAREC_*` settings (meaningless on native x86)~~ — done, see
+  #108/PR #109. Item/building count caps and invader-raids-disabled were kept — sensible hygiene independent of
+  the ARM64/box64 problem, not part of the root cause.
 - Run `terraform destroy` against the Oracle *compute* resources in `infrastructure/terraform` once you're
   confident Contabo is the permanent home — this is what actually stops further Oracle compute charges. Scope this
   carefully: `infrastructure/terraform` also now contains `backup-service-account.tf`'s IAM resources and the

@@ -4,7 +4,7 @@ Orientation for any agent (or human) working in this repo. Read this before touc
 
 ## What this is
 
-A free-tier, Oracle-Cloud-hosted Palworld dedicated server for a 3-person friend group, controlled and observed through a Discord bot, built to a production/portfolio standard: infrastructure as code, containerized services, automated backups, and a visible ticket -> PR -> independent-review development pipeline.
+A Palworld dedicated server for a 3-person friend group, controlled and observed through a Discord bot, built to a production/portfolio standard: infrastructure as code, containerized services, automated backups, and a visible ticket -> PR -> independent-review development pipeline. Game-server compute runs on a Contabo VPS (native x86); Terraform state and world-save backups stay on Oracle Cloud Object Storage (Always Free tier) — see the Architecture section below for why.
 
 Two things are being built at once:
 1. The actual hosting stack (Terraform, Docker, the bot).
@@ -16,12 +16,11 @@ Two things are being built at once:
                          GitHub (issues/PRs/CI)
                                   |
                      +------------------------+
-                     |   Oracle Cloud (OCI)   |  Always Free tier
-                     |  single VCN, 1 subnet  |
+                     |     Contabo VPS        |  Cloud VPS 6, native x86
                      +------------------------+
                                   |
                                   v
-                  Game VM (Ampere A1, 2 OCPU/32GB, always on)
+                  Game VM (6 vCPU/12GB, always on, no emulation)
                   - Docker + Palworld dedicated server container
                   - Discord bot container (Node/TS, discord.js v14)
                     - Slash commands, voice-presence watcher
@@ -29,23 +28,25 @@ Two things are being built at once:
                     - JSON state file (start time, msg ids)
                   - Bot -> game server: SSH (forced command, loopback) + RCON (loopback)
                   - palworld-ctl wrapper (forced-command SSH)
-                  - Block Volume mounted for world save
+                  - Plain data directory for world save (no separate block volume)
                                   |
                                   v
-                         Object Storage bucket
-                    (world backups + Terraform state)
+                  Oracle Cloud Object Storage bucket (Always Free tier)
+                    (world backups + Terraform state -- compute stays on Contabo)
 ```
 
 One VM, not two — see [`docs/decisions/005-consolidate-bot-onto-game-vm.md`](docs/decisions/005-consolidate-bot-onto-game-vm.md)
 for why the Discord bot runs as a second container here rather than on its own host.
 
-**Migration in progress:** the diagram above is the *current, live* state (Oracle Ampere A1 game VM, ARM64 + box64
-emulation). Game-server *compute* is moving to a Contabo VPS (native x86, no emulation) —
-`infrastructure/terraform-contabo` is provisioned, but not yet cut over. Terraform state and world-save backups
-stay on Oracle Object Storage regardless (a deliberate hybrid, not a full Oracle exit). See
-[`docs/decisions/006-migrate-to-contabo.md`](docs/decisions/006-migrate-to-contabo.md) for why, and
-[`docs/runbooks/contabo-cutover.md`](docs/runbooks/contabo-cutover.md) for the cutover steps. Don't assume Contabo
-is live until that ADR's Status section and this note are both updated to say so.
+**Migrated from Oracle Cloud (ARM64 + box64 emulation) to Contabo (native x86)** — see
+[`docs/decisions/006-migrate-to-contabo.md`](docs/decisions/006-migrate-to-contabo.md) for why (box64's emulation
+overhead, not the game/save data size, was causing severe memory pressure on Oracle's free-tier ARM shape) and
+[`docs/runbooks/contabo-cutover.md`](docs/runbooks/contabo-cutover.md) for how the cutover was done. This is a
+deliberate hybrid, not a full Oracle exit: Terraform state and world-save backups stay on Oracle Object Storage
+(free tier, zero compute involved). The Oracle game VM (`infrastructure/terraform`'s compute resources) is retired
+but not yet destroyed — pending `terraform destroy` against just those resources once Contabo has proven stable for
+a while (see that ADR's Status section for current state; keep `infrastructure/terraform`'s IAM/Object-Storage
+resources, which must survive).
 
 ### Key decisions (and why)
 
