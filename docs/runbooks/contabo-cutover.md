@@ -116,7 +116,9 @@ scp -i <admin-key> -r <ADMIN_SSH_USER>@<source-host>:/mnt/palworld-data/Pal/Save
   /tmp/world-export
 
 # Replace the CONTENTS of the server-generated GUID folder from step 2/3 -- do not
-# create a new folder named after the source world's own <WorldGUID>.
+# create a new folder named after the source world's own <WorldGUID>. No separate
+# block volume to mount here -- unlike Oracle, Contabo bundles storage into the
+# instance itself (see infrastructure/cloud-init/game-vm-contabo.yaml).
 ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
   sudo rm -rf /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>
 '
