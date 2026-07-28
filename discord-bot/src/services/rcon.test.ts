@@ -1,9 +1,27 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { EventEmitter } from "node:events";
 
+// A minimal fake net.Socket: an EventEmitter with the handful of Socket methods
+// rcon.ts actually calls. Tests drive it by emitting "connect"/"data"/"error"/"close"
+// themselves, standing in for the real TCP server.
+class FakeSocket extends EventEmitter {
+  public destroyed = false;
+  public writes: Buffer[] = [];
+  setNoDelay = vi.fn();
+  write = vi.fn((buf: Buffer) => {
+    this.writes.push(buf);
+    return true;
+  });
+  destroy = vi.fn(() => {
+    this.destroyed = true;
+  });
+}
+
+let fakeSocket: FakeSocket;
 const connectMock = vi.fn();
 
-vi.mock("rcon-client", () => ({
-  Rcon: { connect: (...args: unknown[]) => connectMock(...args) },
+vi.mock("node:net", () => ({
+  connect: (...args: unknown[]) => connectMock(...args),
 }));
 
 vi.mock("../config.js", () => ({
@@ -14,38 +32,97 @@ vi.mock("../config.js", () => ({
 
 const { sendRconCommand, parsePlayerCount } = await import("./rcon.js");
 
+// Mirrors rcon.ts's own encodePacket -- builds a raw Source RCON packet buffer
+// for a test to hand back as a simulated server response.
+function encodePacket(id: number, type: number, payload: string): Buffer {
+  const payloadBuf = Buffer.from(payload, "utf-8");
+  const size = 4 + 4 + payloadBuf.length + 2;
+  const buf = Buffer.alloc(4 + size);
+  buf.writeInt32LE(size, 0);
+  buf.writeInt32LE(id, 4);
+  buf.writeInt32LE(type, 8);
+  payloadBuf.copy(buf, 12);
+  buf.writeInt16LE(0, 12 + payloadBuf.length);
+  return buf;
+}
+
+const SERVERDATA_AUTH_RESPONSE = 2;
+const SERVERDATA_RESPONSE_VALUE = 0;
+
 describe("sendRconCommand", () => {
   beforeEach(() => {
     connectMock.mockReset();
+    fakeSocket = new FakeSocket();
+    connectMock.mockReturnValue(fakeSocket);
   });
 
-  it("returns ok:true with the response on success", async () => {
-    const send = vi.fn().mockResolvedValue("Players: 2");
-    const end = vi.fn().mockResolvedValue(undefined);
-    connectMock.mockResolvedValue({ send, end });
-
-    const result = await sendRconCommand("ShowPlayers");
-
-    expect(result).toEqual({ ok: true, response: "Players: 2" });
-    expect(send).toHaveBeenCalledWith("ShowPlayers");
-    expect(end).toHaveBeenCalled();
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
-  it("returns ok:false without throwing when the connection fails", async () => {
-    connectMock.mockRejectedValue(new Error("ECONNREFUSED"));
+  it("authenticates, sends the command, and returns the response even though the server echoes id=0 instead of the request's id", async () => {
+    const resultPromise = sendRconCommand("ShowPlayers");
+    fakeSocket.emit("connect");
 
-    const result = await sendRconCommand("ShowPlayers");
+    // Server's real, observed behavior: auth response id happens to match (both 0),
+    // but the command response below is deliberately tagged id=0 regardless of the
+    // id=1 the client sent -- the exact mismatch confirmed against the live server.
+    fakeSocket.emit("data", encodePacket(0, SERVERDATA_AUTH_RESPONSE, ""));
+    fakeSocket.emit("data", encodePacket(0, SERVERDATA_RESPONSE_VALUE, "name,playeruid,steamid\n"));
 
+    const result = await resultPromise;
+    expect(result).toEqual({ ok: true, response: "name,playeruid,steamid\n" });
+  });
+
+  it("returns ok:false when the server signals auth failure (id=-1)", async () => {
+    const resultPromise = sendRconCommand("ShowPlayers");
+    fakeSocket.emit("connect");
+    fakeSocket.emit("data", encodePacket(-1, SERVERDATA_AUTH_RESPONSE, ""));
+
+    const result = await resultPromise;
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("authentication failed");
+  });
+
+  it("returns ok:false without throwing when the connection errors", async () => {
+    const resultPromise = sendRconCommand("ShowPlayers");
+    fakeSocket.emit("error", new Error("ECONNREFUSED"));
+
+    const result = await resultPromise;
     expect(result.ok).toBe(false);
     expect(result.error).toContain("ECONNREFUSED");
   });
 
-  it("does not throw even if end() also fails after a successful send", async () => {
-    const send = vi.fn().mockResolvedValue("OK");
-    const end = vi.fn().mockRejectedValue(new Error("socket already closed"));
-    connectMock.mockResolvedValue({ send, end });
+  it("returns ok:false if the socket closes before any response arrives", async () => {
+    const resultPromise = sendRconCommand("ShowPlayers");
+    fakeSocket.emit("connect");
+    fakeSocket.emit("close");
 
-    await expect(sendRconCommand("Save")).resolves.toEqual({ ok: true, response: "OK" });
+    const result = await resultPromise;
+    expect(result.ok).toBe(false);
+  });
+
+  it("handles a response split across multiple data events", async () => {
+    const resultPromise = sendRconCommand("ShowPlayers");
+    fakeSocket.emit("connect");
+    fakeSocket.emit("data", encodePacket(0, SERVERDATA_AUTH_RESPONSE, ""));
+
+    const fullPacket = encodePacket(0, SERVERDATA_RESPONSE_VALUE, "name,playeruid,steamid\n");
+    fakeSocket.emit("data", fullPacket.subarray(0, 5));
+    fakeSocket.emit("data", fullPacket.subarray(5));
+
+    const result = await resultPromise;
+    expect(result).toEqual({ ok: true, response: "name,playeruid,steamid\n" });
+  });
+
+  it("returns ok:false when RCON_HOST is not configured", async () => {
+    vi.resetModules();
+    vi.doMock("../config.js", () => ({ config: { rcon: { host: "", port: 25575, password: "" } } }));
+    const { sendRconCommand: sendWithoutHost } = await import("./rcon.js");
+
+    const result = await sendWithoutHost("ShowPlayers");
+
+    expect(result).toEqual({ ok: false, error: "RCON_HOST is not configured" });
   });
 });
 
