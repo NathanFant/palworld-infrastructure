@@ -25,6 +25,7 @@ describe("stateStore", () => {
       voicePresenceMessageId: null,
       restartTriggeredAt: null,
       idleSince: null,
+      lifecycleEventMessageId: null,
     });
   });
 
@@ -36,6 +37,26 @@ describe("stateStore", () => {
   it("throws when the file doesn't match the expected shape", async () => {
     writeFileSync(filePath, JSON.stringify({ unrelated: true }), "utf8");
     await expect(getState(filePath)).rejects.toThrow(/expected shape/);
+  });
+
+  it("fills in defaults for fields missing from an older state file rather than rejecting it", async () => {
+    // Simulates a real, already-deployed state.json written before a newer field
+    // (lifecycleEventMessageId) existed -- it must not fail validation on the very
+    // next read after the new field ships.
+    writeFileSync(
+      filePath,
+      JSON.stringify({
+        serverStartedAt: "2026-01-01T00:00:00Z",
+        statusMessageId: "abc",
+        voicePresenceMessageId: null,
+        restartTriggeredAt: null,
+        idleSince: null,
+      }),
+      "utf8",
+    );
+    const state = await getState(filePath);
+    expect(state.lifecycleEventMessageId).toBeNull();
+    expect(state.serverStartedAt).toBe("2026-01-01T00:00:00Z");
   });
 
   it("updateState merges a partial update and persists it", async () => {
@@ -84,6 +105,7 @@ describe("stateStore", () => {
       voicePresenceMessageId: null,
       serverStartedAt: "2026-01-02T00:00:00Z",
       idleSince: null,
+      lifecycleEventMessageId: null,
     });
   });
 
@@ -113,6 +135,7 @@ describe("stateStore", () => {
         voicePresenceMessageId: null,
         restartTriggeredAt: null,
         idleSince: null,
+        lifecycleEventMessageId: null,
       }),
     );
     const state = await updateState({ restartTriggeredAt: "2026-01-01T00:00:00Z" }, badPath);

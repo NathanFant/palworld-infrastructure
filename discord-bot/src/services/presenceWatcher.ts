@@ -1,5 +1,6 @@
 import { Client, Events } from "discord.js";
 import { config } from "../config.js";
+import { announceLifecycleEvent } from "./announcements.js";
 import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
 
@@ -103,13 +104,6 @@ async function waitUntilRunning(): Promise<boolean> {
   return false;
 }
 
-async function announce(client: Client<true>, content: string): Promise<void> {
-  const statusChannel = await client.channels.fetch(config.discord.statusChannelId);
-  if (statusChannel?.isSendable()) {
-    await statusChannel.send(content);
-  }
-}
-
 async function maybeAutoStartOnce(client: Client<true>): Promise<void> {
   if (!config.lifecycle.idleShutdownEnabled) {
     return;
@@ -120,11 +114,11 @@ async function maybeAutoStartOnce(client: Client<true>): Promise<void> {
     return; // already running (or already starting) -- nothing to do
   }
 
-  await announce(client, "🟡 Someone joined voice -- starting the Palworld server...");
+  await announceLifecycleEvent(client, "🟡 Someone joined voice -- starting the Palworld server...");
 
   const startResult = await serverControl.start();
   if (!startResult.ok) {
-    await announce(
+    await announceLifecycleEvent(
       client,
       `Failed to auto-start the Palworld server: ${startResult.error ?? startResult.stderr ?? "unknown error"}`,
     );
@@ -133,7 +127,7 @@ async function maybeAutoStartOnce(client: Client<true>): Promise<void> {
 
   const healthy = await waitUntilRunning();
   if (!healthy) {
-    await announce(
+    await announceLifecycleEvent(
       client,
       "Auto-start triggered, but the server didn't come up within the expected time. Check `/server status`.",
     );
@@ -145,7 +139,7 @@ async function maybeAutoStartOnce(client: Client<true>): Promise<void> {
     restartTriggeredAt: null,
     idleSince: null,
   });
-  await announce(client, "🟢 The Palworld server is online.");
+  await announceLifecycleEvent(client, "🟢 The Palworld server is online.");
 }
 
 // Same write-queue pattern as renderQueue above -- two people joining voice within
