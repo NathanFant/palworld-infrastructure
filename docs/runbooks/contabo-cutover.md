@@ -28,9 +28,8 @@ ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
 Confirm: cloud-init finished with no errors, `ufw` is active with exactly three allow rules (SSH scoped to your
 `admin_ssh_cidr`, the game UDP port, the query UDP port) and a default-deny policy, Docker is active, and note the
 actual login username (this session saw Contabo's real default user vary between "ubuntu" and "admin" across a
-fresh create vs. a reinstall — don't assume `admin_ssh_public_key`'s `default_user` variable value in
-`infrastructure/terraform-contabo/variables.tf` accurately reflects what actually landed in `/etc/passwd`; check for
-real).
+fresh create vs. a reinstall — don't assume `compute.tf`'s hardcoded `default_user = "admin"` attribute on
+`contabo_instance` accurately reflects what actually landed in `/etc/passwd`; check for real).
 
 ## 2. Deploy and start with a fresh/throwaway world — no Oracle data involved yet
 
