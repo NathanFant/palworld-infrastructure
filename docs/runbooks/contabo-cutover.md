@@ -9,10 +9,11 @@ migration exists and what stays on Oracle (Terraform state, world-save backups).
 disk, new SSH host key) — don't touch that Terraform config again once real world-save data is on the box without
 planning for that.
 
-**World-save data moves last, not first.** The Oracle server is live and being actively played on while this
-migration is in progress — don't touch it, and don't pull the real save off it, until every other step below is
-already validated. Steps 1–3 deliberately validate Contabo using a fresh/throwaway world instead, so the live game
-is completely undisturbed until the final cutover moment.
+**World-save data moves last, not first.** Whatever host currently has your most up-to-date save — a live server,
+or your own local machine — shouldn't be touched until every other step below is already validated. Steps 1–3
+deliberately validate Contabo using a fresh/throwaway world instead, so wherever the real game is actually being
+played stays completely undisturbed until the final cutover moment (confirm with whoever's playing which copy —
+Oracle, local, or otherwise — is actually the current one before pulling from it in step 4).
 
 ## 1. Verify the instance itself
 
@@ -82,34 +83,49 @@ minimum) — the Oracle problem only showed up over sustained runtime, not immed
 connect to the throwaway world just to confirm join/play actually works end-to-end (movement, building, saving) —
 it doesn't need to be a real play session, just a functional smoke test.
 
-Once this holds up, stop the container (`palworld-ctl stop`) — do **not** leave the throwaway world's save in place
-under `/mnt/palworld-data`; it needs to be cleared before the real save lands in step 4.
+**Before stopping, note the server's own generated `WorldGUID`** — you'll need it in step 4:
+
+```
+ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> 'sudo ls /mnt/palworld-data/Pal/Saved/SaveGames/0/'
+```
+
+Then stop the container (`palworld-ctl stop`). **Do not delete or rename this folder** — unlike what you might
+expect, the real save's files get moved *into* it in step 4, not alongside it (see below).
 
 ## 4. Only now: move the real world-save data over, and cut everything over together
 
-This is the one step that touches the live Oracle server, so do it as a single, short-disruption window (ideally
-when players are already offline, since it needs a brief pause on Oracle to guarantee the copied save is
-consistent) rather than spreading it out:
+**Important, verified directly (issue #106): the dedicated server generates its own `WorldGUID` on a truly fresh
+boot and ignores any differently-named folder you pre-place — even if it's the only one present.** Introducing the
+real save under its own original `WorldGUID` name does **not** work; the server just creates a second, empty world
+next to it and uses that instead. The fix: move the real save's *files* into the folder the server already
+generated for itself in step 2/3 (noted above), replacing its contents — don't create a new folder named after the
+source world's own GUID.
+
+This is the one step that touches the live source of truth for your world, so do it as a single, short-disruption
+window (ideally when nobody's actively playing, since it needs a brief pause to guarantee the copied save is
+consistent) rather than spreading it out. Substitute `<SOURCE_HOST>` with wherever your current, most up-to-date
+save actually lives — this may be a live server (stop it first the same way) or your own local machine (Palworld's
+local/"host from save" saves live under `%LOCALAPPDATA%\Pal\Saved\SaveGames\<SteamID64>\<WorldGUID>\` on Windows):
 
 ```
-# Stop the Oracle server so the save isn't being written mid-copy
-ssh -i <admin-key> <ADMIN_SSH_USER>@<oracle-ip> 'palworld-ctl stop'
+# If the source is a running server, stop it first so the save isn't being written mid-copy
+ssh -i <admin-key> <ADMIN_SSH_USER>@<source-host> 'palworld-ctl stop'
 
-# Pull the current save down from the Oracle VM
-scp -i <admin-key> -r <ADMIN_SSH_USER>@<oracle-ip>:/mnt/palworld-data/Pal/Saved/SaveGames/0/<WorldGUID> \
+# Pull the current save down (adjust the source path per above)
+scp -i <admin-key> -r <ADMIN_SSH_USER>@<source-host>:/mnt/palworld-data/Pal/Saved/SaveGames/0/<WorldGUID> \
   /tmp/world-export
 
-# Clear the throwaway world from step 2, then push the real save up to Contabo
-# (data directory is a plain folder here -- no separate block volume to mount
-# first, see infrastructure/cloud-init/game-vm-contabo.yaml)
+# Replace the CONTENTS of the server-generated GUID folder from step 2/3 -- do not
+# create a new folder named after the source world's own <WorldGUID>. No separate
+# block volume to mount here -- unlike Oracle, Contabo bundles storage into the
+# instance itself (see infrastructure/cloud-init/game-vm-contabo.yaml).
 ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
-  sudo rm -rf /mnt/palworld-data/Pal/Saved/SaveGames/0/*
-  sudo mkdir -p /mnt/palworld-data/Pal/Saved/SaveGames/0
+  sudo rm -rf /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>
 '
 scp -i <admin-key> -r /tmp/world-export <ADMIN_SSH_USER>@<contabo-ip>:/tmp/world-import
 ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
-  sudo mv /tmp/world-import /mnt/palworld-data/Pal/Saved/SaveGames/0/<WorldGUID>
-  sudo chown -R 1000:1000 /mnt/palworld-data/Pal/Saved/SaveGames/0/<WorldGUID>
+  sudo mv /tmp/world-import /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>
+  sudo chown -R 1000:1000 /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>
   palworld-ctl start
 '
 
@@ -119,13 +135,32 @@ rm -rf /tmp/world-export
 The `chown 1000:1000` matters for the same reason it does in [`world-migration.md`](world-migration.md) — it must
 match `docker/compose.yml`'s `PUID`/`PGID`, or the container can't read/write the save.
 
-Have a player connect and confirm their actual base/character/progress is present (a clean start doesn't by itself
-prove the right `WorldGUID` loaded). Keep the Oracle VM's copy of the save untouched and the VM itself not
-destroyed yet — it's your rollback path if something's wrong with the transferred save.
+Verify the real data actually loaded (don't just trust a clean/healthy container start):
+
+```
+ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
+  sudo docker exec palworld-palworld-1 ls -la /palworld/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>/Level.sav
+'
+```
+
+`Level.sav`'s size should match the source save's exactly (a fresh/empty world's `Level.sav` is only a few KB; a
+real, played world is typically several MB). Have a player connect and confirm their actual base/character/progress
+is present — file size matching is good evidence but isn't the same as someone actually confirming their progress
+is there. Keep the source save's original copy around until this is confirmed — it's your rollback path if
+something's wrong with the transferred data.
 
 ## 5. Cut the bot over (only after step 4 is confirmed good)
 
-Update the real `.env.local` (`GAME_VM_HOST`, `PALWORLD_PUBLIC_HOST`, `ADMIN_SSH_USER`, and the corresponding
+**Stop the old bot deployment first** — the bot has no built-in awareness of "another instance of me is already
+running elsewhere," so leaving the old host's bot container up while starting a new one on Contabo means two
+instances both connect to the same Discord application at once (duplicate/conflicting status messages, doubled
+slash-command handling):
+
+```
+ssh -i <admin-key> <ADMIN_SSH_USER>@<old-host> 'cd /opt/palworld-bot && sudo -u bot docker compose down'
+```
+
+Then update the real `.env.local` (`GAME_VM_HOST`, `PALWORLD_PUBLIC_HOST`, `ADMIN_SSH_USER`, and the corresponding
 `GAME_VM_SSH_*` fields the deployed bot itself uses) to point at Contabo, then redeploy:
 
 ```
