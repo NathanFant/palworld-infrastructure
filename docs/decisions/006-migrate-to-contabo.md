@@ -81,11 +81,23 @@ this (back up first, expect the instance to be briefly unreachable and then come
 
 ## Status
 
-Terraform has provisioned the Contabo instance (`infrastructure/terraform-contabo`), but as of this ADR it is not
-yet reliably reachable over SSH — being worked through directly with Contabo support (see PR #100's discussion for
-the diagnostic trail: reinstalls, SSH key propagation, and an unresponsive VNC console all pointed at a host-side
-issue rather than a configuration bug in this repo).
+**Migration complete.** The initial instance had a real, transient host-side reachability problem (see PR #100's
+discussion: reinstalls, SSH key propagation, and an unresponsive VNC console all pointed at Contabo's own host, not
+a configuration bug here) — it resolved on its own after a Contabo support ticket, without needing a rebuild.
 
-The Oracle game VM ([`001-why-oracle.md`](001-why-oracle.md)) remains the live, production server until the Contabo
-instance is verified reachable and stable. See [`docs/runbooks/contabo-cutover.md`](../runbooks/contabo-cutover.md)
-for the exact steps to run once it is.
+The cutover itself (`docs/runbooks/contabo-cutover.md`) has been run for real: the actual production world save was
+migrated over (verified via file-size match and the server's own REST API reporting the expected world), the
+Discord bot was moved off the Oracle deployment and redeployed against Contabo, and the game server has run stable
+with real save data (~1.6–2.1GB RSS, zero swap — versus Oracle's ~30GB RSS/14GB swap on the same save). `docker/compose.yml`'s
+box64 tuning settings have been removed (#108/PR #109), since they're meaningless on Contabo's native x86.
+
+The Oracle game VM ([`001-why-oracle.md`](001-why-oracle.md)) is retired but **not yet destroyed** — kept briefly as
+a rollback path while Contabo proves out under real, sustained play. `terraform destroy` against just its compute
+resources (not the IAM/Object-Storage resources also living in `infrastructure/terraform`, which must survive) is
+the next step, and stays a human-run action per this repo's convention for real, hard-to-reverse infrastructure
+changes.
+
+Separately tracked, not blocking: RCON/REST API authentication currently fails with "AdminPassword is empty" on
+both the old Oracle deployment and Contabo, despite correct config everywhere checked (#105) — pre-existing, not
+caused by this migration, and doesn't affect basic playability (only the bot's status/player-count/shutdown-countdown
+features, which use RCON).
