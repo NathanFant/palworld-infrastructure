@@ -39,6 +39,14 @@ Two things are being built at once:
 One VM, not two — see [`docs/decisions/005-consolidate-bot-onto-game-vm.md`](docs/decisions/005-consolidate-bot-onto-game-vm.md)
 for why the Discord bot runs as a second container here rather than on its own host.
 
+**Migration in progress:** the diagram above is the *current, live* state (Oracle Ampere A1 game VM, ARM64 + box64
+emulation). Game-server *compute* is moving to a Contabo VPS (native x86, no emulation) —
+`infrastructure/terraform-contabo` is provisioned, but not yet cut over. Terraform state and world-save backups
+stay on Oracle Object Storage regardless (a deliberate hybrid, not a full Oracle exit). See
+[`docs/decisions/006-migrate-to-contabo.md`](docs/decisions/006-migrate-to-contabo.md) for why, and
+[`docs/runbooks/contabo-cutover.md`](docs/runbooks/contabo-cutover.md) for the cutover steps. Don't assume Contabo
+is live until that ADR's Status section and this note are both updated to say so.
+
 ### Key decisions (and why)
 
 - **One always-on VM, not stop/start of the game VM.** Ampere A1 is Always Free regardless of uptime, so there's no cost benefit to stopping the VM itself — only to stopping the *game process*. Automating OCI instance lifecycle (start/stop) adds fragile API surface for no savings; the bot must stay reachable to run `/server start` even when the game is fully down — which it is, since only the Palworld container is ever started/stopped, never the VM, and the bot's own container runs independently of the Palworld container's state. **Only the Palworld Docker container is started/stopped, never the VM or the bot's container.**

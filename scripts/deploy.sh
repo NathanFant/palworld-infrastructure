@@ -5,16 +5,20 @@
 # config/version is a human/admin action, per CLAUDE.md. Deliberately does NOT
 # start/stop the service; that stays palworld-ctl's (and the bot's) job.
 #
-# Usage: scripts/deploy.sh
-# Reads config from .env.local at the repo root.
+# Usage: scripts/deploy.sh [env-file]
+# Reads config from .env.local at the repo root by default. Pass an alternate
+# path (e.g. .env.contabo.local) to target a different host without touching
+# .env.local -- useful for validating a new deployment (see
+# docs/runbooks/contabo-cutover.md) while .env.local still points at the live
+# production host.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ENV_LOCAL="${REPO_ROOT}/.env.local"
+ENV_LOCAL="${1:-${REPO_ROOT}/.env.local}"
 
 if [ ! -f "${ENV_LOCAL}" ]; then
-  echo "Missing ${ENV_LOCAL} -- copy .env.example to .env.local and fill in real values first." >&2
+  echo "Missing ${ENV_LOCAL} -- copy .env.example to .env.local (or the path you passed) and fill in real values first." >&2
   exit 1
 fi
 
