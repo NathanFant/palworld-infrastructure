@@ -126,10 +126,29 @@ scp -i <admin-key> -r /tmp/world-export <ADMIN_SSH_USER>@<contabo-ip>:/tmp/world
 ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
   sudo mv /tmp/world-import /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>
   sudo chown -R 1000:1000 /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>
-  palworld-ctl start
 '
 
 rm -rf /tmp/world-export
+```
+
+**If the source save was ever played on Windows** (including "host from save data" co-op via the base game — true
+for this project's own save), move aside any `WorldOption.sav` in the copied folder before starting, or RCON/REST
+API authentication will silently fail with "AdminPassword is empty" even though the password is correct everywhere
+else. Hit this exact issue during this project's own cutover -- see #105, root cause and a fix proposed upstream at
+[thijsvanloef/palworld-server-docker#886](https://github.com/thijsvanloef/palworld-server-docker/issues/886) /
+[#910](https://github.com/thijsvanloef/palworld-server-docker/pull/910):
+
+```
+ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
+  sudo mv /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>/WorldOption.sav \
+    /mnt/palworld-data/Pal/Saved/SaveGames/0/<GENERATED_WORLDGUID_FROM_STEP_3>/WorldOption.sav.bak
+'
+```
+
+Either way, now start the server:
+
+```
+ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> 'palworld-ctl start'
 ```
 
 The `chown 1000:1000` matters for the same reason it does in [`world-migration.md`](world-migration.md) — it must
