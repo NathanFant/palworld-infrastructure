@@ -1,7 +1,26 @@
 # Runbook: migrating an existing world save onto the new server
 
 One-time migration of a world you've already been playing (locally, or on a
-different host) onto this project's game VM, before its first start.
+different host) onto this project's game VM.
+
+**Important, verified directly (issue #106): the dedicated server generates its own
+`WorldGUID` on a truly fresh boot and ignores any folder you pre-place, even if it's
+the only one present.** Pre-placing a folder named after your own save's `WorldGUID`
+before the container's very first start does **not** work — the server creates a
+new, empty world alongside it instead. The real procedure:
+
+1. Start the container fresh at least once with an *empty* `SaveGames/0/` (or however
+   it already is) and let it generate its own `WorldGUID` folder.
+2. Stop the container (`palworld-ctl stop`).
+3. Move your real save's *files* into that server-generated `WorldGUID` folder
+   (replacing its contents) — not a folder you create yourself.
+4. Restart. Once a container has gone through this once, subsequent restarts
+   correctly reuse the same folder without regenerating a new empty world.
+
+Steps 1 and 3 below assume the container has already been started once and you know
+its generated `WorldGUID`. Verified against `thijsvanloef/palworld-server-docker:latest`
+/ Palworld dedicated server v1.0.1.100619 — worth re-checking if either changes
+meaningfully.
 
 ## 1. Find your existing save
 
