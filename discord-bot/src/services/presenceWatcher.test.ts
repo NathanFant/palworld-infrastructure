@@ -208,6 +208,7 @@ describe("maybeAutoStart", () => {
     configMock.lifecycle = { idleShutdownEnabled: true };
     serverControlStatusMock.mockReset();
     serverControlStartMock.mockReset();
+    getStateMock.mockReset().mockResolvedValue({ lifecycleEventMessageId: null });
     updateStateMock.mockReset().mockResolvedValue(undefined);
 
     statusChannel = { isSendable: () => true, send: vi.fn().mockResolvedValue({ id: "msg-id" }) };
@@ -249,14 +250,19 @@ describe("maybeAutoStart", () => {
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("online"));
   });
 
-  it("announces a failure without updating state when start itself fails", async () => {
+  it("announces a failure without updating server-lifecycle state when start itself fails", async () => {
     serverControlStatusMock.mockResolvedValue({ ok: true, status: { running: false } });
     serverControlStartMock.mockResolvedValue({ ok: false, error: "ssh failed" });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await maybeAutoStart(client as any);
 
-    expect(updateStateMock).not.toHaveBeenCalled();
+    // updateState IS called by announceLifecycleEvent to track the announcement
+    // message's own id -- that's expected. What must NOT happen on a failed start
+    // is any update to the server's own lifecycle fields.
+    expect(updateStateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ serverStartedAt: expect.anything() }),
+    );
     expect(statusChannel.send).toHaveBeenCalledWith(expect.stringContaining("Failed"));
   });
 });

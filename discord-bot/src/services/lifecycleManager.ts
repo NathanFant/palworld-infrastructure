@@ -1,5 +1,6 @@
 import { Client } from "discord.js";
 import { config } from "../config.js";
+import { announceLifecycleEvent } from "./announcements.js";
 import { sendRconCommand } from "./rcon.js";
 import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
@@ -15,13 +16,6 @@ export const RESTART_WARNING_SECONDS = 5 * 60;
 // unless-stopped` bringing the container back plus the game process's own boot time,
 // not just the RCON shutdown delay itself.
 const RESTART_COMPLETION_GRACE_MS = 5 * 60 * 1000;
-
-async function announce(client: Client<true>, content: string): Promise<void> {
-  const statusChannel = await client.channels.fetch(config.discord.statusChannelId);
-  if (statusChannel?.isSendable()) {
-    await statusChannel.send(content);
-  }
-}
 
 // Phase 1: if a restart is already in flight, check whether the cycle has completed
 // rather than considering a new restart. Checked first (and exclusively) so a pending
@@ -48,7 +42,7 @@ async function checkRestartCompletion(client: Client<true>, restartTriggeredAt: 
     restartTriggeredAt: null,
     idleSince: null,
   });
-  await announce(client, "🟢 Scheduled restart complete -- the Palworld server is back online.");
+  await announceLifecycleEvent(client, "🟢 Scheduled restart complete -- the Palworld server is back online.");
 }
 
 // Phase 2: no restart currently pending -- check whether this server's uptime has
@@ -80,7 +74,7 @@ async function maybeTriggerRestart(client: Client<true>, serverStartedAt: string
   }
 
   await updateState({ restartTriggeredAt: new Date().toISOString() });
-  await announce(client, message);
+  await announceLifecycleEvent(client, message);
 }
 
 async function runLifecycleCheckOnce(client: Client<true>): Promise<void> {

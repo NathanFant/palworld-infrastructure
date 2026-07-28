@@ -20,6 +20,13 @@ export interface BotState {
    * Once (now - idleSince) exceeds config.lifecycle.idleShutdownMinutes, the server
    * is auto-stopped. Null whenever idleness isn't currently being tracked. */
   idleSince: string | null;
+  /** Live-edited "lifecycle event" message (auto-start/auto-stop/scheduled-restart
+   * announcements) -- shared across idleShutdownManager.ts, presenceWatcher.ts, and
+   * lifecycleManager.ts via announcements.ts's announceLifecycleEvent(), so a burst
+   * of these events edits one message in place instead of posting a new one each
+   * time. Separate from statusMessageId/voicePresenceMessageId so none of the three
+   * clobber each other's message. */
+  lifecycleEventMessageId: string | null;
 }
 
 const DEFAULT_STATE: BotState = {
@@ -28,9 +35,16 @@ const DEFAULT_STATE: BotState = {
   voicePresenceMessageId: null,
   restartTriggeredAt: null,
   idleSince: null,
+  lifecycleEventMessageId: null,
 };
 
-function isBotState(value: unknown): value is BotState {
+// lifecycleEventMessageId is checked separately (see getState) rather than required
+// here, since a real, already-deployed state.json predating that field's addition
+// must still validate successfully -- it's filled in with its default rather than
+// being treated as a shape mismatch. Every other field stays strictly required:
+// this function must still reject a genuinely unrelated/corrupt object outright,
+// not just paper over missing fields with defaults across the board.
+function isBotState(value: unknown): value is Omit<BotState, "lifecycleEventMessageId"> {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -66,7 +80,14 @@ export async function getState(filePath: string = config.lifecycle.stateFilePath
     throw new Error(`State file at ${filePath} doesn't match the expected shape -- refusing to silently reset it.`);
   }
 
-  return parsed;
+  const withLifecycleField = parsed as Partial<Pick<BotState, "lifecycleEventMessageId">>;
+  const lifecycleEventMessageId =
+    typeof withLifecycleField.lifecycleEventMessageId === "string" ||
+    withLifecycleField.lifecycleEventMessageId === null
+      ? withLifecycleField.lifecycleEventMessageId
+      : null;
+
+  return { ...parsed, lifecycleEventMessageId };
 }
 
 // Serializes updateState() calls per file path -- without this, two overlapping

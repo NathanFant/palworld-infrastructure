@@ -1,15 +1,9 @@
 import { Client } from "discord.js";
 import { config } from "../config.js";
+import { announceLifecycleEvent } from "./announcements.js";
 import { parsePlayerCount, sendRconCommand } from "./rcon.js";
 import { serverControl } from "./serverControl.js";
 import { getState, updateState } from "./stateStore.js";
-
-async function announce(client: Client<true>, content: string): Promise<void> {
-  const statusChannel = await client.channels.fetch(config.discord.statusChannelId);
-  if (statusChannel?.isSendable()) {
-    await statusChannel.send(content);
-  }
-}
 
 async function runIdleCheckOnce(client: Client<true>): Promise<void> {
   if (!config.lifecycle.idleShutdownEnabled) {
@@ -64,7 +58,10 @@ async function runIdleCheckOnce(client: Client<true>): Promise<void> {
   // Same fields handleStop() sets for a manual /server stop, plus clearing the
   // idle timer -- there's nothing left to be idle about once it's actually stopped.
   await updateState({ restartTriggeredAt: null, idleSince: null });
-  await announce(client, `🔴 Stopped the Palworld server automatically after ${idleMinutes} minutes with no players.`);
+  await announceLifecycleEvent(
+    client,
+    `🔴 Stopped the Palworld server automatically after ${idleMinutes} minutes with no players.`,
+  );
 }
 
 // Same write-queue-style serialization as lifecycleManager.ts/statusHeartbeat.ts's
