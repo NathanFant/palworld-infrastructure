@@ -22,12 +22,10 @@ packages:
   # build-essential + git: building mcrcon from source (backup.sh's RCON client).
   - build-essential
   - git
-  # aws-cli: backup.sh/restore.sh now authenticate to Oracle Object Storage via a
-  # static Customer Secret Key against its S3-compatible endpoint, since the
-  # instance-principal auth the Oracle deployment used only works for an actual
-  # Oracle VM (see infrastructure/terraform-contabo/variables.tf's
-  # oracle_backup_access_key/oracle_backup_secret_key).
-  - awscli
+  # unzip: needed to install the AWS CLI (see runcmd -- there's no "awscli" apt
+  # package on Ubuntu 24.04/Noble, and cloud-init's own snap fallback also fails,
+  # so it's installed via AWS's official installer instead).
+  - unzip
 
 users:
   - default
@@ -76,19 +74,6 @@ write_files:
           exit 64
           ;;
       esac
-
-  # Static Customer Secret Key credential for Oracle Object Storage's S3-compatible
-  # endpoint -- backup.sh/restore.sh use this (via `aws --profile oci-backup`)
-  # instead of the Oracle-only instance-principal auth the game VM used there. Owned
-  # by palworld-bot (the user backup.sh/restore.sh run as), 0600 -- same protection
-  # level as any other credential file on this host.
-  - path: /home/palworld-bot/.aws/credentials
-    permissions: "0600"
-    owner: palworld-bot:palworld-bot
-    content: |
-      [oci-backup]
-      aws_access_key_id = ${oracle_backup_access_key}
-      aws_secret_access_key = ${oracle_backup_secret_key}
 
   - path: /etc/systemd/system/palworld-backup@.service
     permissions: "0644"
@@ -205,6 +190,30 @@ runcmd:
   # --- Discord bot deploy target + persistent state directory ---
   - mkdir -p /opt/palworld-bot /opt/palworld-bot/data
   - chown bot:docker /opt/palworld-bot /opt/palworld-bot/data
+
+  # --- AWS CLI v2 (official installer -- no "awscli" apt package exists on Ubuntu
+  # 24.04/Noble, and cloud-init's own snap fallback also fails against this image) ---
+  - >
+    test -x /usr/local/bin/aws ||
+    (curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip &&
+    unzip -q /tmp/awscliv2.zip -d /tmp &&
+    /tmp/aws/install &&
+    rm -rf /tmp/awscliv2.zip /tmp/aws)
+
+  # --- Static Customer Secret Key credential for Oracle Object Storage's
+  # S3-compatible endpoint -- backup.sh/restore.sh use this (via `aws --profile
+  # oci-backup`) instead of the Oracle-only instance-principal auth the game VM
+  # used there. Written here in runcmd, not write_files -- write_files runs before
+  # the users-groups module in cloud-init's default module order, so it fails with
+  # "unknown user" against an account (palworld-bot) that doesn't exist yet at that
+  # point; runcmd runs after users-groups, so the account is guaranteed to exist.
+  - mkdir -p /home/palworld-bot/.aws
+  - >
+    printf '[oci-backup]\naws_access_key_id = ${oracle_backup_access_key}\naws_secret_access_key = ${oracle_backup_secret_key}\n'
+    > /home/palworld-bot/.aws/credentials
+  - chown -R palworld-bot:palworld-bot /home/palworld-bot/.aws
+  - chmod 700 /home/palworld-bot/.aws
+  - chmod 600 /home/palworld-bot/.aws/credentials
 
   # --- mcrcon: RCON client backup.sh uses to trigger a Save before snapshotting ---
   - >
