@@ -18,6 +18,7 @@ packages:
   - gnupg
   - fail2ban
   - unattended-upgrades
+  - ufw
   # build-essential + git: building mcrcon from source (backup.sh's RCON client).
   - build-essential
   - git
@@ -163,6 +164,20 @@ write_files:
       WantedBy=timers.target
 
 runcmd:
+  # --- Host firewall (ufw) ---
+  # Stands in for Contabo's own cloud firewall (contabo_firewall in
+  # infrastructure/terraform-contabo/network.tf), which needs a paid add-on this
+  # instance doesn't have. Same allow-list as the Oracle deployment's security list:
+  # SSH scoped to admin_ssh_cidr, game + query UDP ports open, everything else denied.
+  # RCON deliberately never gets a rule here -- docker/compose.yml only ever binds it
+  # to 127.0.0.1.
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow from ${admin_ssh_cidr} to any port 22 proto tcp
+  - ufw allow ${palworld_port}/udp
+  - ufw allow ${palworld_query_port}/udp
+  - ufw --force enable
+
   # --- Docker Engine + Compose plugin, from Docker's official apt repo ---
   - install -m 0755 -d /etc/apt/keyrings
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc

@@ -5,7 +5,3 @@ output "game_vm_public_ip" {
 output "game_vm_id" {
   value = contabo_instance.game.id
 }
-
-output "firewall_id" {
-  value = contabo_firewall.game.id
-}
