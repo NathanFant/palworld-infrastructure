@@ -17,19 +17,27 @@ is completely undisturbed until the final cutover moment.
 ## 1. Verify the instance itself
 
 ```
-ssh -i <admin-key> <ADMIN_SSH_USER>@<contabo-ip> '
-  cloud-init status --wait
+ssh -i <admin-key> ubuntu@<contabo-ip> '
+  cloud-init status --long
   sudo ufw status verbose
   sudo systemctl is-active docker
-  whoami
+  which aws && aws --version
+  sudo ls -la /home/palworld-bot/.aws/
 '
 ```
 
-Confirm: cloud-init finished with no errors, `ufw` is active with exactly three allow rules (SSH scoped to your
-`admin_ssh_cidr`, the game UDP port, the query UDP port) and a default-deny policy, Docker is active, and note the
-actual login username (this session saw Contabo's real default user vary between "ubuntu" and "admin" across a
-fresh create vs. a reinstall — don't assume `compute.tf`'s hardcoded `default_user = "admin"` attribute on
-`contabo_instance` accurately reflects what actually landed in `/etc/passwd`; check for real).
+**The real, working admin login is `ubuntu`, not `admin`.** Contabo's own `defaultUser` API field (hardcoded to
+`"admin"` in `compute.tf`) never fully provisions — its `chpasswd` step fails because no `rootPassword` secret is
+supplied, and the `admin` account doesn't actually get created at all. This is expected and harmless: the real
+admin access comes from cloud-init's own `users: - default` entry, which maps to this base image's actual default
+user (`ubuntu`) — a completely separate mechanism from Contabo's `defaultUser` field. Use `ADMIN_SSH_USER=ubuntu`
+in any `.env*` file targeting this instance.
+
+Confirm: `cloud-init status --long` finished with no errors (a fresh instance built from the current cloud-init
+should be fully clean — see #103 for two bugs, since fixed, that previously caused real errors here around AWS CLI
+install and the backup credentials file), `ufw` is active with exactly three allow rules (SSH scoped to your
+`admin_ssh_cidr`, the game UDP port, the query UDP port) and a default-deny policy, Docker is active, `aws --version`
+works, and `/home/palworld-bot/.aws/credentials` exists (owned by `palworld-bot`, mode 600).
 
 ## 2. Deploy and start with a fresh/throwaway world — no Oracle data involved yet
 
